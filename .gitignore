@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local data and generated research outputs
+/data/*
+!/data/.gitkeep
+!/data/raw/
+/data/raw/*
+!/data/raw/.gitkeep
+/experiments/*
+!/experiments/.gitkeep
+.pytest_cache/
+.ruff_cache/

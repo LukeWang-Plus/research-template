@@ -1,0 +1,38 @@
+method = "ragged"
+seed = 42
+device = "cpu"
+output = "experiments"
+name = "variable length regression"
+tags = ["example", "custom-loop"]
+
+[data]
+name = "toy-ragged"
+path = "data/toy-ragged"
+
+[protocol]
+task = "ragged-regression"
+split = "fixed-generator-17-v1"
+metrics = "mse-v1"
+evaluation = "held-out-v1"
+
+[params]
+lr = 0.05
+
+[train]
+epochs = 3
+metric = "mse"
+direction = "min"
+keep_top_k = 1
+
+# This custom example reports pruning steps in epochs, starting at 1.
+[search.pruning]
+strategy = "none"
+
+[search.space."params.lr"]
+type = "float"
+low = 0.001
+high = 0.08
+log = true
+
+[search.sampler]
+strategy = "tpe"

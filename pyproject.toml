@@ -1,0 +1,61 @@
+[project]
+name = "research"
+version = "0.1.0"
+description = "A lightweight personal PyTorch research template"
+readme = "README.md"
+requires-python = ">=3.12, <3.13"
+dependencies = [
+  "filelock>=4.0.0",
+  "ipykernel>=7.3.0",
+  "matplotlib>=3.11.2",
+  "numpy>=2.5.3",
+  "optuna>=5.0.0",
+  "pydantic>=2.13.5",
+  "scipy>=1.18.1",
+  "tomlkit>=0.15.1",
+  "torch==2.7.1",
+  "typer>=0.27.2",
+]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+  { index = "pytorch-cu118", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+explicit = true
+
+[project.scripts]
+research = "core.cli:app"
+
+[project.optional-dependencies]
+tensorboard = ["tensorboard>=2.21.0"]
+wandb = ["wandb>=0.30.0"]
+swanlab = ["swanlab>=0.10.0"]
+
+[dependency-groups]
+dev = ["pytest>=9.1.1", "ruff>=0.16.8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["core", "methods", "dataio"]
+
+[tool.ruff]
+exclude = ["data", "experiments", ".venv"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

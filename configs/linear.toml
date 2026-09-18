@@ -1,0 +1,47 @@
+method = "linear"
+seed = 42
+device = "cpu"
+output = "experiments"
+name = "tiny classification"
+tags = ["example"]
+
+[data]
+name = "toy-classification"
+path = "data/toy-classification"
+
+[protocol]
+task = "toy-binary-classification"
+split = "fixed-generator-17-v1"
+metrics = "accuracy-v1"
+evaluation = "held-out-v1"
+
+[params]
+lr = 0.1
+batch_size = 8
+hidden = 0
+scheduler_gamma = 0.95
+
+[train]
+epochs = 4
+metric = "accuracy"
+direction = "max"
+keep_top_k = 1
+
+# Pruning is off by default. Set strategy = "median" to enable it.
+[search.pruning]
+strategy = "none"
+# For median only, optional native parameters (omitted values use Optuna defaults):
+# [search.pruning.params]
+# n_startup_trials = 5
+# n_warmup_steps = 0
+# interval_steps = 1
+# n_min_trials = 1
+
+[search.space."params.lr"]
+type = "float"
+low = 0.01
+high = 0.2
+log = true
+
+[search.sampler]
+strategy = "tpe"

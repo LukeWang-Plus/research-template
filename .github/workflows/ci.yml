@@ -1,0 +1,27 @@
+name: Research checks
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  cpu:
+    env:
+      MPLBACKEND: Agg
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --extra tensorboard
+      - if: runner.os == 'Linux'
+        run: |
+          uv run ruff format --check .
+          uv run ruff check .
+      - run: uv run pytest -q
+      - run: uv run python -m tests.smoke --device cpu
