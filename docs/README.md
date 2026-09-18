@@ -2,7 +2,7 @@
 
 ## 当前阶段与阅读入口
 
-个人研究模板的定位、安全与工程边界、首版功能、核心架构及单阶段实施计划已确认。首版实现及四项授权审查修复已落地，本地验证已通过；D1–D13 实现决策复核结论已纳入正式文档，已按授权落实代码和用户说明，本次验证单独记录，不沿用此前日志冒充。外部 CI 与用户验收仍未完成，实际证据、待办和限制见实施计划。
+个人研究模板的定位、安全与工程边界、首版功能、核心架构及单阶段实施计划已确认。首版实现及四项授权审查修复已落地，本地验证已通过；D1–D13 实现决策复核结论已纳入正式文档，已按授权落实代码和用户说明，本次验证单独记录，不沿用此前日志冒充。Windows/Linux CPU CI 已于 2026-09-18 对提交 `84ed8be` 验证通过；用户整体验收仍待确认。CI 证据及覆盖边界见 [实施计划第 4.2 节](ImplementationPlan.md#42-环境与平台矩阵)。此前本地验证日志已按要求清理，保留历史执行摘要；Linux GPU 与 W&B/SwanLab 真实服务仍未验证。
 
 建议依次阅读 [产品需求](PRD.md)、[技术架构](Architecture.md) 和 [实施计划](ImplementationPlan.md)。当前公共包为 `core/`、CLI 为 `research`，命名与固定 PyTorch 约束见技术架构。旧方案只供参考，不构成新设计约束；其中 DeepBench 的历史称呼保留，不代表当前命名。
 
@@ -13,7 +13,7 @@
 | [DocumentationRules.md](DocumentationRules.md) | 通用文档职责与内容归属规则 |
 | [PRD.md](PRD.md) | 项目目标、安全边界、首版功能范围、验收主线、非目标及待讨论事项 |
 | [Architecture.md](Architecture.md) | 已确认的浅层目录、配置与 CLI、方法接入、默认循环契约、记录与恢复、checkpoint、调参与平台实现边界；已实现的入口、结果来源与 checkpoint 管理/状态分离契约 |
-| [ImplementationPlan.md](ImplementationPlan.md) | 单阶段任务顺序、旧代码临时保留、精简验证、平台实测边界与执行状态 |
+| [ImplementationPlan.md](ImplementationPlan.md) | 单阶段任务顺序、精简验证、平台实测边界与执行状态 |
 | [references/refactor-requirements.md](references/refactor-requirements.md) | 旧现状分析与旧重构方案的历史参考，不具有规范效力 |
 | [research/implementation-choices-pending.md](research/implementation-choices-pending.md) | 已完成的实现决策复核过程；正式结论已同步，保留用于溯源，不是第二份规范 |
 | [decisions/_Template.md](decisions/_Template.md) | 后续高变更成本决策的 ADR 模板；目前没有正式 ADR |

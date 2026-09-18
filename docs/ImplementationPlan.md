@@ -1,6 +1,6 @@
 # 实施计划
 
-> 状态：首版、四项审查修复及剪枝/统计调整已有实现和下述本地验证。D1–D13 调整已获后续编码授权并完成，本次验证见第 6 节。双系统 CI 与整体验收仍未完成。
+> 状态：首版、四项审查修复及剪枝/统计调整已有实现和下述本地验证。D1–D13 调整已获后续编码授权并完成，本次验证见第 6 节。Windows/Linux CPU CI 已于 2026-09-18 通过（提交 `84ed8be`）；整体验收仍待用户确认。
 
 ## 1. 范围与执行方式
 
@@ -22,12 +22,12 @@
 
 | 顺序 | 目标与范围 | 交付物 | 最小必要验证 | 状态 |
 |---|---|---|---|---|
-| 1 | 前置核实、浅层布局 | 基础项目结构与依赖配置 | 新结构不依赖旧代码 | 已实施；未暂存/提交 |
+| 1 | 前置核实、浅层布局 | 基础项目结构与依赖配置 | 新结构不依赖旧代码 | 已实施并提交（`84ed8be`） |
 | 2 | 配置、记录、写入保护与方法接入 | TOML/Pydantic 配置、Typer 薄入口、本地记录、写锁、按需加载方法映射 | 生效配置与路径规则、必要报错、覆盖/互斥及最小自定义调用 | 已实施，本地回归通过 |
 | 3 | 默认训练、自定义示例、checkpoint、恢复和独立测试 | 默认监督流程、状态字典保存、Top-K、启动记录、测试结果、两个轻量示例 | CPU 训练/测试闭环、恢复边界与有效记录、自定义流程接入 | 已实施，本次含 checkpoint 局部布局修复及验证 |
 | 4 | 调参、实验组及辅助平台 | Optuna 搜索/继续/重试/导出、实验组继续、三种可选平台适配 | 可容忍与不可容忍异常、失败 trial 显式重试、组成员恢复/重跑、TensorBoard 写入 | 已实施，本地回归通过；真实服务边界见下 |
 | 5 | 查询、比较、显著性检验与重绘 | 列表筛选、标签备注、汇总/配对检验、CSV/图片、独立绘图入口 | 可比性条件、有效结果选择、基础统计输入与从保存结果重绘 | 已实施，本次三项结果比较修复及回归通过 |
-| 6 | 使用说明与整体验收 | 精简 Notebook/CLI/Bash/Slurm 示例、CI、实际验证记录 | 按第 4 节的验收矩阵执行并报告结果 | 说明/示例/工作流已提供；整体验收待 CI 与用户确认 |
+| 6 | 使用说明与整体验收 | 精简 Notebook/CLI/Bash/Slurm 示例、CI、实际验证记录 | 按第 4 节的验收矩阵执行并报告结果 | 说明/示例/工作流已提供；双系统 CI 已通过；整体验收待用户确认 |
 
 ## 4. 验证与验收
 
@@ -48,19 +48,23 @@ uv run python -m tests.smoke --device cpu
 uv run python -m tests.smoke --device cuda:0
 ```
 
-Ruff 排除生成产物，pytest 仅收集 tests；smoke 位于 `tests/smoke.py`，由模块入口手动/CI 调用，不由 pytest 自动收集。上述命令本地通过：Ruff 格式化/lint、11 项 pytest、两个示例的 CPU 与 Windows GPU 训练/恢复/测试闭环。日志见本地 `experiments/reports/review-fixes-verification.txt`（生成产物，受 Git 忽略）。
+Ruff 排除生成产物，pytest 仅收集 tests；smoke 位于 `tests/smoke.py`，由模块入口手动/CI 调用，不由 pytest 自动收集。上述命令本地通过：Ruff 格式化/lint、11 项 pytest、两个示例的 CPU 与 Windows GPU 训练/恢复/测试闭环。当时保存的本地原始日志已按用户要求删除；此处保留历史验证摘要，不再提供本地日志作为可访问证据。
 
 ### 4.2 环境与平台矩阵
 
 | 验证项 | 方式 | 本次要求 | 当前状态 |
 |---|---|---|---|
-| Windows CPU | GitHub Actions | 精简测试与 CPU 示例通过 | CI 未执行；本机 pytest 与 CPU smoke 已通过，不替代 CI |
-| Linux CPU | GitHub Actions | 精简测试与 CPU 示例通过 | 未执行；当前无 Git 仓库/远端，尚不能触发 |
-| Ruff 格式化/lint | GitHub Actions，可先本地执行 | 必须通过，无需在所有环境重复运行 | 本地通过；CI 未执行 |
+| Windows CPU | GitHub Actions | 精简测试与 CPU 示例通过 | CI 已通过：pytest 与两个示例 CPU smoke，见下方运行记录 |
+| Linux CPU | GitHub Actions | 精简测试与 CPU 示例通过 | CI 已通过：pytest 与两个示例 CPU smoke，见下方运行记录 |
+| Ruff 格式化/lint | GitHub Actions，可先本地执行 | 必须通过，无需在所有环境重复运行 | 本地通过；Linux CI 格式化/lint 通过（Windows 按设计跳过重复检查） |
 | Windows 单 GPU | 当前电脑本地 smoke test | 实施时核实 CUDA 可用，记录实际设备和结果 | 已通过：RTX 4090，torch 2.7.1+cu118，CUDA 构建 11.8 |
 | Linux GPU | 不单独配置 | 不作为首版验收前置条件，明确未单独实测 | 本次不测 |
-| TensorBoard | 本地事件文件写入验证，可在 CI 执行 | 无需外部服务，检查实际写入 | pytest 实际写入并读取事件文件通过 |
+| TensorBoard | 本地事件文件写入验证，可在 CI 执行 | 无需外部服务，检查实际写入 | 本地及双系统 CI 的 pytest 实际写入并读取事件文件通过 |
 | W&B / SwanLab | 实现接入，暂不做真实服务测试 | 明确标注未实测，不要求账号或凭据，不用模拟结果宣称接入已验证 | 本次不实测 |
+
+2026-09-18 通过 `gh run view` 核实 [Research checks #35326413999](https://github.com/LukeWang-Plus/research-template/actions/runs/35326413999)，对应提交 `84ed8be9c9d7b9dfb22f0c8b6811a3a087765c94`，整体结论为 success：Windows 作业耗时 1 分 49 秒，Linux 作业耗时 10 分钟。两者的安装、pytest、CPU smoke 步骤均成功；Linux 额外执行 Ruff 格式化/lint 并通过。
+
+CI 有非阻塞的 Action Node 20 弃用警告；本次仅同步验证文档，未升级工作流。仓库与远端已建立，不再存在“无法触发 CI”的阻碍。此前本地验证日志和测试产物已按用户要求清理；GPU 结果保留为历史执行摘要，不冒充本次 CI 覆盖。
 
 GitHub Actions 工作流文件存在不等于 CI 已通过，必须记录实际执行结果。Windows GPU 与 Linux CPU 通过也不等于 Linux GPU 已验证；首版接受此覆盖边界，不配置专门 GPU CI。
 
@@ -81,8 +85,8 @@ GitHub Actions 工作流文件存在不等于 CI 已通过，必须记录实际�
 - 四项审查修复已完成：数据集身份参与协议可比性；结果使用对应完成/来源 checkpoint 启动配置；显式区分默认验证选择、自定义最终指标与独立测试；checkpoint 管理 JSON 与研究状态分离并支持方法级显式加载。
 - 新增最小回归覆盖：仅返回指标的自定义方法；同协议不同数据集及同名不同协议；4→10 epoch 恢复与不同来源启动的测试配置；可信特殊对象恢复/测试及不反序列化的查询；管理 JSON 发布前/后的中断、同 epoch 重存和恢复有效历史。连同原有检查共 11 项 pytest 通过。
 - PRD、Architecture、本文及使用说明已同步；旧产物不自动迁移、不改写。没有新增注册框架、通用事务、清理服务或管理系统。
-- 外部阻碍：本次 `git status` 仍报告当前目录不是 Git 仓库，未创建仓库或推送，GitHub Actions 无实际执行证据。W&B/SwanLab 真实服务和 Linux GPU 按原约定不测；本次不重复执行 Notebook kernel/UI 验证。
-- 用户已确认另有备份并授权删除旧代码临时副本，相关排除和忽略规则已清理；这不替代尚未完成的外部验收。无暂存或提交。
+- 原 Git/CI 阻碍已解除：仓库已提交并推送，双系统 CPU CI 已通过，证据见第 4.2 节。W&B/SwanLab 真实服务和 Linux GPU 仍按原约定未测；Notebook kernel/UI 未新增验证。
+- 用户已确认另有备份并授权删除旧代码临时副本，相关排除和忽略规则已清理；这不等于用户已确认整体验收。
 
 ### 后续已确认调整（本次已实施）
 
@@ -90,14 +94,14 @@ GitHub Actions 工作流文件存在不等于 CI 已通过，必须记录实际�
 - `search.pruning` 已改为 `strategy`（`none / median`）和 `params`；默认 `none`。解析时读取当前 Optuna 原生默认参数，严格检查类型和未知参数，并复用原生取值校验。配置快照、trial 记录及导出均保存生效参数；保留方法能力检查，无布尔兼容分支或自动迁移。两个示例配置已同步。
 - `paired()` 保留原接口和 CLI，补齐两侧均值/样本标准差、双侧标识与状态。仅约定的差值无方差/全零 Wilcoxon 返回 null p 值和明确原因；输入错误、未约定异常仍报错，不输出显著性判断。
 - 在原测试内补充默认 NopPruner、实际 MedianPruner 按 epoch 预热后剪枝、参数校验与持久化/导出、未支持方法拒绝启用、搜索边界，以及正常/退化统计与 CLI JSON、原有输入错误和异常传播检查。不增加测试矩阵或研究方法认证。
-- 本次最终验证：`uv run ruff format --check .`、`uv run ruff check .`、`MPLBACKEND=Agg uv run pytest -q` 全部通过，pytest 为 11 项（原用例补充断言，8.47 秒）。普通 pytest 复跑曾因本机 Tk 的 `combobox.tcl` 缺失而出现 1 项绘图失败；未修改绘图代码或修复环境，显式选用非交互 Agg 后端完成验证。失败及复跑输出均保存在 `experiments/reports/pruning-statistics-verification.txt`。本次未重跑 smoke、GPU 或 Notebook，前述 CPU/GPU smoke 证据属于此前版本，不冒充本次执行。
+- 本次最终验证：`uv run ruff format --check .`、`uv run ruff check .`、`MPLBACKEND=Agg uv run pytest -q` 全部通过，pytest 为 11 项（原用例补充断言，8.47 秒）。普通 pytest 复跑曾因本机 Tk 的 `combobox.tcl` 缺失而出现 1 项绘图失败；未修改绘图代码或修复环境，显式选用非交互 Agg 后端完成验证。当时失败及复跑的本地原始日志现已按用户要求删除，仅保留本段历史摘要。本次未重跑 smoke、GPU 或 Notebook，前述 CPU/GPU smoke 证据属于此前版本，不冒充本次执行。
 - Architecture §7.2/§8.2、PRD 及根 README 的受影响用法已同步；README 保持用户向、自包含且无开发文档依赖，未加入内部实施细节。CLI 不改；配对命令示例按实际位置参数写为 `research paired accuracy ...`，已通过 CLI 回归。
-- 当前目录仍无 Git 仓库，CI 未触发，不宣称通过；W&B/SwanLab 真实服务和 Linux GPU 不在本次范围。PyTorch 固定版本/来源、`data/raw/.gitkeep` 及忽略规则不变，无暂存或提交。
+- 该阶段未执行 CI；后续双系统 CPU CI 已通过，见第 4.2 节。W&B/SwanLab 真实服务和 Linux GPU 不在该阶段范围。PyTorch 固定版本/来源、`data/raw/.gitkeep` 及忽略规则不变，无暂存或提交。
 
 
 ## 6. 实现隐含决策复核后的实施结果
 
-需求以 PRD 为准，参数与接口约束以 Architecture 为准；[讨论记录](research/implementation-choices-pending.md) 仅供溯源。用户随后明确授权本轮代码实施，以下已落实；前述日志仍只代表此前实现，本轮另存验证证据。
+需求以 PRD 为准，参数与接口约束以 Architecture 为准；[讨论记录](research/implementation-choices-pending.md) 仅供溯源。用户随后明确授权本轮代码实施，以下已落实；以下保留各轮实际执行摘要，不将历史验证视为后续版本已验证；原始本地日志已清理，当前可访问 CI 证据见第 4.2 节。
 
 | 对应项 | 最小实施范围 | 状态 |
 |---|---|---|
@@ -123,8 +127,8 @@ GitHub Actions 工作流文件存在不等于 CI 已通过，必须记录实际�
 - 已完成上述代码、配置示例、Notebook 和根 README 同步。采样配置为 `search.sampler.strategy/params`；组名称通过既有 annotate 增加 name 参数填写；自定义尺度支持单独 step，不强迫维护 epoch。没有新增依赖、框架或旧产物迁移。训练脚本没有旧实验组命令，未作无意义修改。
 - 同步用户用法时发现原 README 的 compare/summarize/plot `--metric`、plot `--destination` 与位置参数实现不一致；已显式声明为必填选项，并验证 compare/plot 的实际 CLI 调用。paired 的 metric 仍为位置参数。
 - Ruff 格式化/lint、13 项 pytest（现有用例补断言和两个聚焦检查）、两个示例的 CPU 与 Windows RTX 4090 GPU 训练/恢复/测试 smoke 全部通过。测试显式使用 `MPLBACKEND=Agg`，不改公共绘图后端；TensorBoard 实测确认训练/验证的 epoch 横轴。
-- 初次全局格式检查发现 Notebook 长行，格式化后最终检查通过。完整最终命令与输出在 `experiments/reports/implementation-decisions-verification.txt`（本地生成产物，Git 忽略）。同坐标合并发送有本地适配逻辑检查，但不冒充 W&B/SwanLab 真实服务验证。
-- CI、Linux GPU、W&B/SwanLab 真实服务及 Notebook kernel/UI 本次未执行；Notebook 仅同步用法并通过格式/lint。外部验收边界不变。
+- 初次全局格式检查发现 Notebook 长行，格式化后最终检查通过。该轮原始本地日志现已按用户要求删除，本文保留执行摘要。同坐标合并发送有本地适配逻辑检查，但不冒充 W&B/SwanLab 真实服务验证。
+- 该轮未执行 CI；后续双系统 CPU CI 已通过，见第 4.2 节。Linux GPU、W&B/SwanLab 真实服务及 Notebook kernel/UI 未新增验证；Notebook 仅同步用法并通过格式/lint。
 - PyTorch 固定版本/来源和其他依赖未改；README 保持用户向、自包含且不依赖 docs。未暂存或提交；整体验收仍需用户确认。
 
 
