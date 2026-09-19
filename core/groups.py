@@ -40,7 +40,7 @@ def create(configs: list[Config], seeds: list[int], *, id=None, root=ROOT):
     return id
 
 
-def run_group(config, id, *, action=None, root=ROOT):
+def run_group(config, id, *, action=None, root=ROOT, display=None):
     if action not in (None, "resume", "rerun"):
         raise ValueError("Failed members require resume or rerun")
     target = directory(config, "groups", id, root)
@@ -66,6 +66,7 @@ def run_group(config, id, *, action=None, root=ROOT):
                     overwrite=exists and action == "rerun",
                     root=root,
                     source={"group": id},
+                    display=display,
                 )
             meta["status"] = "completed"
             meta.pop("error", None)
@@ -77,7 +78,7 @@ def run_group(config, id, *, action=None, root=ROOT):
     return id
 
 
-def test_members(config, id, members, *, root=ROOT):
+def test_members(config, id, members, *, root=ROOT, display=None):
     target = directory(config, "groups", id, root)
     meta = read_json(target / "record.json")
     if not members or not set(members) <= set(meta["members"]):
@@ -85,5 +86,5 @@ def test_members(config, id, members, *, root=ROOT):
     results = []
     for member in members:
         actual = load(target / f"{member}.toml", root=root)
-        results.append(test(actual, source=member, root=root))
+        results.append(test(actual, source=member, root=root, display=display))
     return results

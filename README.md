@@ -55,7 +55,7 @@ uv run research test experiments/runs/first-run/config.toml \
 uv run research show first-test
 ```
 
-The test record should report `"status": "completed"` and contain a `result` dictionary with the evaluation metrics. Training and test outputs are stored separately under `experiments/runs/`.
+The terminal shows a completion summary and a metric table. The saved test record reports `"status": "completed"` and contains a `result` dictionary with the evaluation metrics. Training and test outputs are stored separately under `experiments/runs/`.
 
 Data preparation refuses to overwrite existing example data. Skip that command on subsequent runs. Use a new run ID for a new experiment; omit `--id` to generate one automatically.
 
@@ -131,6 +131,10 @@ This layout is a convention, not a requirement. Methods control their own format
 Local data and experiment outputs are excluded from Git. Maintain any required backups separately.
 
 ## Training and Evaluation
+
+CLI training and testing display a start summary (run ID, method, device, and output location) and a final status with results or an error. The supervised loop shows an epoch progress bar in an interactive terminal, including elapsed time, training loss, and the validation metric. Slurm logs and redirected output receive one plain-text line per completed epoch instead. Testing has no progress bar; custom loops control their own intermediate display. Optuna retains its native trial output.
+
+Presentation does not replace or duplicate experiment records. Final supervised results remain validation-selected, not simply the last epoch's metrics. Python entry points remain quiet by default.
 
 ### Resume or restart
 
@@ -301,6 +305,22 @@ Use `--folder studies` or `--folder groups` to inspect or annotate those records
 | `experiments/reports/` | Exported tables, figures, and configurations |
 
 Run directories contain TOML configurations, `record.json`, metric history, logs, and any checkpoints or method-specific artifacts. An `interrupted` status may be inferred from an inactive writer lock. A study with unfinished launch records is shown as `unconfirmed`, rather than assumed to be active.
+
+### Display and save results
+
+`list` displays a compact experiment table; `show` presents details, results, sources, and execution history. Studies include trial tables and errors, while groups include member states. Missing values appear as `—`; long IDs and text wrap rather than being truncated.
+
+Query and analysis commands (`list`, `show`, `compare`, `summarize`, and `paired`) accept `--save PATH.json` to export their complete return value while retaining the readable terminal view:
+
+```bash
+uv run research show first-test --save experiments/reports/first-test.json
+uv run research summarize TEST_SEED_1 TEST_SEED_2 \\
+    --metric accuracy --save experiments/reports/summary.json
+```
+
+Replace the uppercase IDs with actual runs. Existing destinations require `--overwrite`. Relative export paths resolve against the project root; saving is explicit, with no automatic report copies. There is no `--json` terminal mode. CSV and figure exports remain available separately.
+
+Terminal numbers use six significant digits, including scientific notation for small values. JSON/CSV exports and experiment records retain their original numeric precision. Exported query results may include derived information and are not necessarily copies of `record.json`. Python return structures and statistical calculations are unchanged.
 
 ### Compare results
 

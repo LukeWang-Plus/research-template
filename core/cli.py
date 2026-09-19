@@ -6,8 +6,8 @@ from typing import Annotated
 
 import typer
 
-from core import analysis, groups, runner, tuning
-from core.config import ROOT, load
+from core import analysis, display, groups, runner, tuning
+from core.config import ROOT, load, path
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 group_app = typer.Typer(no_args_is_help=True)
@@ -19,6 +19,12 @@ Overrides = Annotated[
 ]
 
 
+def save_result(result, destination, overwrite, root):
+    if destination is not None:
+        saved = analysis.save_json(result, destination, overwrite=overwrite, root=root)
+        display.message(f"Saved JSON: {saved}")
+
+
 def config(file, overrides, root):
     return load(file, overrides or [], root)
 
@@ -26,7 +32,7 @@ def config(file, overrides, root):
 @app.command()
 def prepare(file: Path, root: Root = ROOT, set: Overrides = None):
     """Explicitly prepare data; existing prepared data is never silently rebuilt."""
-    typer.echo(runner.prepare(config(file, set, root), root))
+    display.message(f"Prepared data: {runner.prepare(config(file, set, root), root)}")
 
 
 @app.command()
@@ -39,15 +45,14 @@ def train(
     set: Overrides = None,
 ):
     """Train or resume a run (resume and overwrite are different operations)."""
-    typer.echo(
-        runner.execute(
-            config(file, set, root),
-            id=id,
-            resume=resume,
-            overwrite=overwrite,
-            root=root,
-            invocation=sys.argv,
-        )
+    runner.execute(
+        config(file, set, root),
+        id=id,
+        resume=resume,
+        overwrite=overwrite,
+        root=root,
+        invocation=sys.argv,
+        display=display.RunDisplay(),
     )
 
 
@@ -63,17 +68,16 @@ def test(
     set: Overrides = None,
 ):
     """Create an independent test result from a source run or external checkpoint."""
-    typer.echo(
-        runner.test(
-            config(file, set, root),
-            source=source,
-            selection=checkpoint,
-            external=external,
-            id=id,
-            overwrite=overwrite,
-            root=root,
-            invocation=sys.argv,
-        )
+    runner.test(
+        config(file, set, root),
+        source=source,
+        selection=checkpoint,
+        external=external,
+        id=id,
+        overwrite=overwrite,
+        root=root,
+        invocation=sys.argv,
+        display=display.RunDisplay(),
     )
 
 
@@ -109,16 +113,15 @@ def export_trial(
     overwrite: bool = False,
     root: Root = ROOT,
 ):
-    typer.echo(
-        tuning.export(
-            load(file, root=root),
-            study,
-            destination,
-            trial_number=trial,
-            overwrite=overwrite,
-            root=root,
-        )
+    saved = tuning.export(
+        load(file, root=root),
+        study,
+        destination,
+        trial_number=trial,
+        overwrite=overwrite,
+        root=root,
     )
+    display.message(f"Saved TOML: {saved}")
 
 
 @group_app.command("create")
@@ -128,17 +131,23 @@ def group_create(
     id: str | None = None,
     root: Root = ROOT,
 ):
-    typer.echo(
-        groups.create(
-            [load(file, root=root) for file in files], seeds, id=id, root=root
-        )
+    created = groups.create(
+        [load(file, root=root) for file in files], seeds, id=id, root=root
     )
+    display.message(f"Created group: {created}")
 
 
 @group_app.command("run")
 def group_run(file: Path, id: str, action: str | None = None, root: Root = ROOT):
     """Continue serially; --action resume/rerun handles failed members explicitly."""
-    typer.echo(groups.run_group(load(file, root=root), id, action=action, root=root))
+    completed = groups.run_group(
+        load(file, root=root),
+        id,
+        action=action,
+        root=root,
+        display=display.RunDisplay(),
+    )
+    display.message(f"Completed group: {completed}")
 
 
 @group_app.command("test")
@@ -148,11 +157,10 @@ def group_test(
     members: Annotated[list[str], typer.Option("--member")],
     root: Root = ROOT,
 ):
-    typer.echo(
-        analysis.pretty(
-            groups.test_members(load(file, root=root), id, members, root=root)
-        )
+    results = groups.test_members(
+        load(file, root=root), id, members, root=root, display=display.RunDisplay()
     )
+    display.table("Test runs", ("Run ID",), ((item,) for item in results))
 
 
 @app.command("list")
@@ -164,27 +172,36 @@ def list_runs(
     seed: int | None = None,
     status: str | None = None,
     tag: str | None = None,
+    save: Path | None = None,
+    overwrite: bool = False,
     root: Root = ROOT,
 ):
-    typer.echo(
-        analysis.pretty(
-            analysis.list_records(
-                output,
-                root=root,
-                kind=kind,
-                method=method,
-                dataset=dataset,
-                seed=seed,
-                status=status,
-                tag=tag,
-            )
-        )
+    result = analysis.list_records(
+        output,
+        root=root,
+        kind=kind,
+        method=method,
+        dataset=dataset,
+        seed=seed,
+        status=status,
+        tag=tag,
     )
+    display.listing(result)
+    save_result(result, save, overwrite, root)
 
 
 @app.command()
-def show(id: str, output: str = "experiments", folder: str = "runs", root: Root = ROOT):
-    typer.echo(analysis.pretty(analysis.detail(id, output, root=root, folder=folder)))
+def show(
+    id: str,
+    output: str = "experiments",
+    folder: str = "runs",
+    root: Root = ROOT,
+    save: Path | None = None,
+    overwrite: bool = False,
+):
+    result = analysis.detail(id, output, root=root, folder=folder)
+    display.detail(result)
+    save_result(result, save, overwrite, root)
 
 
 @app.command()
@@ -215,31 +232,33 @@ def compare(
     metric: Annotated[str, typer.Option()],
     csv: str | None = None,
     overwrite: bool = False,
+    save: Path | None = None,
     output: str = "experiments",
     root: Root = ROOT,
 ):
-    typer.echo(
-        analysis.pretty(
-            analysis.table(
-                ids,
-                metric,
-                destination=csv,
-                overwrite=overwrite,
-                output=output,
-                root=root,
-            )
-        )
+    if csv and save and path(csv, root) == path(save, root):
+        raise ValueError("CSV and JSON destinations must be different")
+    result = analysis.table(
+        ids, metric, destination=csv, overwrite=overwrite, output=output, root=root
     )
+    display.comparison(result, metric)
+    if csv:
+        display.message(f"Saved CSV: {path(csv, root)}")
+    save_result(result, save, overwrite, root)
 
 
 @app.command()
 def summarize(
     ids: Annotated[list[str], typer.Argument()],
     metric: Annotated[str, typer.Option()],
+    save: Path | None = None,
     output: str = "experiments",
+    overwrite: bool = False,
     root: Root = ROOT,
 ):
-    typer.echo(analysis.pretty(analysis.summary(ids, metric, output=output, root=root)))
+    result = analysis.summary(ids, metric, output=output, root=root)
+    display.summary(result, metric)
+    save_result(result, save, overwrite, root)
 
 
 @app.command()
@@ -248,14 +267,14 @@ def paired(
     right: Annotated[list[str], typer.Option("--right")],
     metric: str,
     test: Annotated[str, typer.Option()],
+    save: Path | None = None,
     output: str = "experiments",
+    overwrite: bool = False,
     root: Root = ROOT,
 ):
-    typer.echo(
-        analysis.pretty(
-            analysis.paired(left, right, metric, test=test, output=output, root=root)
-        )
-    )
+    result = analysis.paired(left, right, metric, test=test, output=output, root=root)
+    display.paired(result, metric)
+    save_result(result, save, overwrite, root)
 
 
 @app.command()
@@ -273,9 +292,10 @@ def plot(
     fig = analysis.curves(
         ids, metric, split=split, title=title, output=output, root=root
     )
-    typer.echo(
-        analysis.save_figure(fig, destination, dpi=dpi, overwrite=overwrite, root=root)
+    saved = analysis.save_figure(
+        fig, destination, dpi=dpi, overwrite=overwrite, root=root
     )
+    display.message(f"Saved figure: {saved}")
 
 
 if __name__ == "__main__":

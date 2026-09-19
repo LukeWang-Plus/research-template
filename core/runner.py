@@ -35,9 +35,12 @@ def execute(
     trial=None,
     source=None,
     invocation=None,
+    display=None,
 ):
     if resume and (overwrite or id is None):
         raise ValueError("Resume requires an ID and cannot be combined with overwrite")
+    if trial is not None:
+        display = None  # Optuna retains its native output.
     method = get(config.method)
     if not hasattr(method, "run"):
         config.train.require("epochs", "metric", "direction")
@@ -75,6 +78,8 @@ def execute(
             invocation=invocation,
         )
         try:
+            if display:
+                display.start(run, supervised=not hasattr(method, "run"))
             run.open_platforms()
             seed_all(config.seed)
             if run.last:
@@ -86,7 +91,12 @@ def execute(
                 result = method.run(config, run, Path(root).resolve(), trial)
                 result_source["kind"] = "custom_final"
             else:
-                train(method.build(config, Path(root).resolve()), run, trial)
+                train(
+                    method.build(config, Path(root).resolve()),
+                    run,
+                    trial,
+                    on_epoch=display.epoch if display else None,
+                )
                 validation = [
                     row for row in history(target) if row["split"] == "validation"
                 ]
@@ -115,6 +125,9 @@ def execute(
                 run.finish("failed", error=f"{type(close_exc).__name__}: {close_exc}")
                 raise close_exc from exc
             raise
+        finally:
+            if display:
+                display.finish()
     return id
 
 
@@ -128,6 +141,7 @@ def test(
     overwrite=False,
     root=ROOT,
     invocation=None,
+    display=None,
 ):
     """Source config owns architecture; evaluation config may select data/protocol/device."""
     if (source is None) == (external is None):
@@ -186,6 +200,8 @@ def test(
             invocation=invocation,
         )
         try:
+            if display:
+                display.start(run)
             run.open_platforms()
             seed_all(config.seed)
             method = get(config.method)
@@ -216,4 +232,7 @@ def test(
                 run.finish("failed", error=f"{type(close_exc).__name__}: {close_exc}")
                 raise close_exc from exc
             raise
+        finally:
+            if display:
+                display.finish()
     return id

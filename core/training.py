@@ -82,7 +82,7 @@ def evaluate(parts: Evaluation, device="cpu"):
     return values, pred, target
 
 
-def train(parts: Training, run, trial=None):
+def train(parts: Training, run, trial=None, *, on_epoch=None):
     config = run.config
     config.train.require("epochs", "metric", "direction")
     model = parts.model.to(config.device)
@@ -150,6 +150,8 @@ def train(parts: Training, run, trial=None):
             "validation": values,
         }
         run.save_checkpoint(state, epoch, score)
+        if on_epoch is not None:
+            on_epoch(epoch, total / denominator, score)
         if trial is not None:
             trial.report(score, epoch)
             if trial.should_prune():

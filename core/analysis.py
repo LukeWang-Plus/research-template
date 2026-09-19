@@ -330,3 +330,13 @@ def save_figure(fig, destination, *, dpi=300, overwrite=False, root=ROOT):
 
 def pretty(value):
     return json.dumps(value, indent=2, ensure_ascii=False)
+
+
+def save_json(result, destination, *, overwrite=False, root=ROOT):
+    """Export the complete result, never the formatted terminal view."""
+    target = path(destination, root)
+    content = json.dumps(result, indent=2, ensure_ascii=False, allow_nan=False)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("w" if overwrite else "x", encoding="utf-8") as file:
+        file.write(content)
+    return target

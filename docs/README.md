@@ -4,7 +4,7 @@
 
 个人研究模板的定位、安全与工程边界、首版功能、核心架构及单阶段实施计划已确认。首版实现及四项授权审查修复已落地，本地验证已通过；D1–D13 实现决策复核结论已纳入正式文档，已按授权落实代码和用户说明，本次验证单独记录，不沿用此前日志冒充。Windows/Linux CPU CI 已于 2026-09-18 对提交 `84ed8be` 验证通过；用户整体验收仍待确认。CI 证据及覆盖边界见 [实施计划第 4.2 节](ImplementationPlan.md#42-环境与平台矩阵)。此前本地验证日志已按要求清理，保留历史执行摘要；Linux GPU 与 W&B/SwanLab 真实服务仍未验证。
 
-新增终端展示与显式 JSON 保存方案已讨论确认，尚未实施：需求见 PRD 第 5.10 节，展示约束见 Architecture 第 2.4 节，待办见 ImplementationPlan 第 7 节。本轮仅同步开发文档，用户 README 待代码落实后更新。
+新增终端展示与显式 JSON 保存已按授权实施：需求见 PRD 第 5.10 节，展示约束见 Architecture 第 2.4 节，实现与验证见 ImplementationPlan 第 7 节。英文用户 README 已同步实际用法；此前 CI 结果不冒充本次变更已通过 CI。
 
 建议依次阅读 [产品需求](PRD.md)、[技术架构](Architecture.md) 和 [实施计划](ImplementationPlan.md)。当前公共包为 `core/`、CLI 为 `research`，命名与固定 PyTorch 约束见技术架构。旧方案只供参考，不构成新设计约束；其中 DeepBench 的历史称呼保留，不代表当前命名。
 

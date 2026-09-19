@@ -496,7 +496,16 @@ def test_groups_queries_statistics_and_saved_plots(tmp_path, monkeypatch):
     )
     atomic(tmp_path / "input.toml", dumps(c))
     for args in [
-        ["compare", *evaluations, "--metric", "accuracy", "--csv", "cli.csv"],
+        [
+            "compare",
+            *evaluations,
+            "--metric",
+            "accuracy",
+            "--csv",
+            "cli.csv",
+            "--save",
+            "comparison.json",
+        ],
         [
             "plot",
             members[0],
@@ -513,6 +522,9 @@ def test_groups_queries_statistics_and_saved_plots(tmp_path, monkeypatch):
     ]:
         result = CliRunner().invoke(app, args + ["--root", str(tmp_path)])
         assert result.exit_code == 0, result.output
+    assert read_json(tmp_path / "comparison.json") == analysis.table(
+        evaluations, "accuracy", root=tmp_path
+    )
     # Deliberately controlled saved scores verify pairing/input checks, not model superiority.
     right = []
     for i, source in enumerate(members):
@@ -544,9 +556,10 @@ def test_groups_queries_statistics_and_saved_plots(tmp_path, monkeypatch):
     for flag, ids in [("--left", evaluations), ("--right", right)]:
         for id in ids:
             arguments += [flag, id]
-    cli_result = CliRunner().invoke(app, arguments)
+    cli_result = CliRunner().invoke(app, arguments + ["--save", "paired.json"])
     assert cli_result.exit_code == 0, cli_result.output
-    assert json.loads(cli_result.output) == result
+    assert "Paired comparison" in cli_result.output
+    assert read_json(tmp_path / "paired.json") == result
     wilcoxon = analysis.paired(
         evaluations, right, "accuracy", test="wilcoxon", root=tmp_path
     )
@@ -585,9 +598,12 @@ def test_groups_queries_statistics_and_saved_plots(tmp_path, monkeypatch):
         assert degenerate["right"] == pytest.approx(
             {"mean": np.mean(right_scores), "std": np.std(right_scores, ddof=1)}
         )
-        cli_result = CliRunner().invoke(app, arguments + ["--test", test])
+        cli_result = CliRunner().invoke(
+            app, arguments + ["--test", test, "--save", "paired.json", "--overwrite"]
+        )
         assert cli_result.exit_code == 0, cli_result.output
-        assert json.loads(cli_result.output) == degenerate
+        assert "not_computed" in cli_result.output
+        assert read_json(tmp_path / "paired.json") == degenerate
     for left_ids, right_ids in [
         (evaluations, evaluations),
         ([evaluations[0], evaluations[0]], right[:2]),
