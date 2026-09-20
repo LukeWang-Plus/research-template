@@ -169,7 +169,7 @@ def test_training_feedback_preserves_records(tmp_path, monkeypatch):
         assert torch.equal(a["model"][key], b["model"][key])
     assert len(list(silent.iterdir())) == len(list(visible.iterdir()))
     text = stream.getvalue()
-    assert "Starting train: visible" in text and "Finished train: visible" in text
+    assert "Starting train · visible" in text and "Completed train · visible" in text
     assert text.count("train/loss=") == config.train.epochs
     assert "\x1b[" not in text and "\r" not in text
     stream.seek(0)
@@ -182,8 +182,8 @@ def test_training_feedback_preserves_records(tmp_path, monkeypatch):
         display=display.RunDisplay(),
     )
     text = stream.getvalue()
-    assert "Starting test: evaluation" in text and "Checkpoint" in text
-    assert "Epoch " not in text and "Finished test: evaluation" in text
+    assert "Starting test · evaluation" in text and "Checkpoint" not in text
+    assert "Epoch " not in text and "Completed test · evaluation" in text
     before = (visible / "record.json").read_bytes()
     runner.execute(
         config, id="visible", resume=True, root=tmp_path, display=display.RunDisplay()
@@ -232,9 +232,154 @@ def test_custom_failure_and_optuna_output_boundary(tmp_path, monkeypatch):
     )
     assert isinstance(result.exception, ValueError)
     text = stream.getvalue()
-    assert "Finished train: failed" in text and "[red]original error[/red]" in text
+    assert "Failed train · failed" in text and "[red]original error[/red]" in text
     assert "Results" not in text
     assert (
         read_json(tmp_path / "experiments/runs/failed/record.json")["status"]
         == "failed"
     )
+
+
+def test_compact_details_history_and_utc_times(monkeypatch, tmp_path):
+    stream = StringIO()
+    monkeypatch.setattr(display, "console", Console(file=stream, width=240))
+    start = "2026-09-18T18:00:00.123456+08:00"
+    end = "2026-09-18T18:04:32.654321+08:00"
+    record = {
+        "id": "failed-run",
+        "kind": "train",
+        "status": "failed",
+        "created": start,
+        "ended": end,
+        "error": "original failure",
+        "protocol": {"task": "classification"},
+        "launches": [
+            {
+                "number": 1,
+                "status": "failed",
+                "started": start,
+                "ended": end,
+                "resume": None,
+                "error": "original failure",
+            }
+        ],
+    }
+    original = deepcopy(record)
+    display.detail(record)
+    text = stream.getvalue()
+    assert "Launch history" not in text
+    assert text.count("original failure") == 1
+    assert "2026-09-18 10:00:00" in text and "2026-09-18 10:04:32" in text
+    assert "Started (UTC)" in text and "Ended (UTC)" in text
+    assert "10:00:00 UTC" not in text and "10:04:32 UTC" not in text
+    assert "123456" not in text and "+08:00" not in text
+    assert "Protocol.task" in text
+    assert record == original
+    analysis.save_json(record, "record.json", root=tmp_path)
+    assert read_json(tmp_path / "record.json") == original
+    record["launches"].append(
+        {
+            "number": 2,
+            "status": "failed",
+            "started": end,
+            "ended": end,
+            "resume": {"launch": 1, "epoch": 2},
+            "error": "latest failure",
+        }
+    )
+    record["error"] = "latest failure"
+    stream.seek(0)
+    stream.truncate(0)
+    display.detail(record)
+    text = stream.getvalue()
+    assert "Launch history" in text and "Launch errors" in text
+    assert text.count("original failure") == text.count("latest failure") == 1
+    record["launches"][0]["error"] = "latest failure"
+    stream.seek(0)
+    stream.truncate(0)
+    display.detail(record)
+    assert stream.getvalue().count("latest failure") == 2
+    record["launches"][0]["error"] = "original failure"
+    record.update(status="completed", error=None)
+    record["launches"][-1].update(status="completed", error=None)
+    stream.seek(0)
+    stream.truncate(0)
+    display.detail(record)
+    assert stream.getvalue().count("original failure") == 1
+    assert "latest failure" not in stream.getvalue()
+    rendered = []
+    monkeypatch.setattr(
+        display, "fields", lambda title, data: rendered.append((title, data))
+    )
+    monkeypatch.setattr(
+        display,
+        "table",
+        lambda title, columns, rows: rendered.append((title, list(rows))),
+    )
+    paired = {
+        "test": "ttest",
+        "alternative": "two-sided",
+        "pairs": 3,
+        "mean_difference": 1.0,
+        "p_value": None,
+        "status": "not_computed",
+        "reason": "Paired differences have zero variance",
+        "left": {"mean": 2.0, "std": 0.0},
+        "right": {"mean": 1.0, "std": 0.0},
+    }
+    display.paired(paired, "score")
+    assert len(rendered) == 2
+    assert rendered[0][1][0]["Test"] == "ttest"
+    assert rendered[0][1][1]["Reason"] == paired["reason"]
+
+
+def test_grouped_fields_and_compact_listing(monkeypatch):
+    stream = StringIO()
+    monkeypatch.setattr(display, "console", Console(file=stream, width=100))
+    records = [
+        dict(
+            id="274ca1aa436845fc9bfb8393403f9e65",
+            name="Baseline classification",
+            kind="train",
+            method="linear",
+            dataset="toy-classification",
+            seed=42,
+            status="completed",
+        ),
+        dict(
+            id="75f6899000574a3d96ecec0952ea5f6e",
+            name="",
+            kind="train",
+            method="linear",
+            dataset="toy-classification",
+            seed=7,
+            status="completed",
+        ),
+    ]
+    original = deepcopy(records)
+    display.listing(records)
+    text = stream.getvalue()
+    assert "Experiment" in text and "Baseline classification" in text
+    assert all(text.count(record["id"]) == 1 for record in records)
+    assert records == original
+    views = []
+    monkeypatch.setattr(display.console, "print", views.append)
+    display.fields("Sections", [{"One": 1}, {}, {"Two": 2}, {}])
+    assert [row.end_section for row in views[-1].rows] == [True, False]
+    display.detail(
+        dict(
+            id="study",
+            kind="study",
+            status="completed",
+            trials=[],
+            trial_counts={"COMPLETE": 1, "FAIL": 0, "PRUNED": 0},
+            unfinished_trials=[],
+        )
+    )
+    labels = views[-2].columns[0]._cells
+    assert {str(cell) for cell in labels} >= {
+        "COMPLETE",
+        "FAIL",
+        "PRUNED",
+        "Unfinished trials",
+    }

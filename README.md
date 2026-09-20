@@ -132,7 +132,7 @@ Local data and experiment outputs are excluded from Git. Maintain any required b
 
 ## Training and Evaluation
 
-CLI training and testing display a start summary (run ID, method, device, and output location) and a final status with results or an error. The supervised loop shows an epoch progress bar in an interactive terminal, including elapsed time, training loss, and the validation metric. Slurm logs and redirected output receive one plain-text line per completed epoch instead. Testing has no progress bar; custom loops control their own intermediate display. Optuna retains its native trial output.
+CLI training and testing display the run ID, method, and device at the start, followed by the final status, output location, and results or an error at the end. The supervised loop shows an epoch progress bar in an interactive terminal, including elapsed time, training loss, and the validation metric. Slurm logs and redirected output receive one plain-text line per completed epoch instead. Testing has no progress bar; custom loops control their own intermediate display. Optuna retains its native trial output.
 
 Presentation does not replace or duplicate experiment records. Final supervised results remain validation-selected, not simply the last epoch's metrics. Python entry points remain quiet by default.
 
@@ -308,13 +308,13 @@ Run directories contain TOML configurations, `record.json`, metric history, logs
 
 ### Display and save results
 
-`list` displays a compact experiment table; `show` presents details, results, sources, and execution history. Studies include trial tables and errors, while groups include member states. Missing values appear as `—`; long IDs and text wrap rather than being truncated.
+`list` displays a compact experiment table; `show` presents details, results, sources, and execution history. Studies include trial tables and errors, while groups include member states. Missing values appear as `—`; long IDs and text wrap rather than being truncated. Terminal timestamps are displayed in UTC with second-level precision.
 
 Query and analysis commands (`list`, `show`, `compare`, `summarize`, and `paired`) accept `--save PATH.json` to export their complete return value while retaining the readable terminal view:
 
 ```bash
 uv run research show first-test --save experiments/reports/first-test.json
-uv run research summarize TEST_SEED_1 TEST_SEED_2 \\
+uv run research summarize TEST_SEED_1 TEST_SEED_2 \
     --metric accuracy --save experiments/reports/summary.json
 ```
 

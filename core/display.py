@@ -1,5 +1,6 @@
 """Human-readable views. Never modify results or write experiment records."""
 
+from datetime import datetime, timezone
 from time import monotonic
 
 from rich.console import Console
@@ -39,8 +40,15 @@ def fields(title, data):
     view = Table(title=Text(title), header_style="bold")
     view.add_column("Field", style="bold", overflow="fold")
     view.add_column("Value", overflow="fold")
-    for key, item in data.items():
-        view.add_row(Text(key), Text(value(item)))
+    groups = [data] if isinstance(data, dict) else data
+    groups = [group for group in groups if group]
+    for index, group in enumerate(groups):
+        for row, (key, item) in enumerate(group.items()):
+            view.add_row(
+                Text(key),
+                Text(value(item)),
+                end_section=index < len(groups) - 1 and row == len(group) - 1,
+            )
     console.print(view)
 
 
@@ -48,63 +56,84 @@ def listing(records):
     if not records:
         message("No matching records.")
         return
-    keys = ("id", "kind", "method", "dataset", "seed", "status", "name")
+    keys = ("kind", "method", "dataset", "seed", "status")
     table(
         "Experiments",
-        ("ID", "Type", "Method", "Dataset", "Seed", "Status", "Name"),
-        ([row.get(key) for key in keys] for row in records),
+        ("Experiment", "Type", "Method", "Dataset", "Seed", "Status"),
+        (
+            [
+                f"{row['name']}\n{row['id']}" if row.get("name") else row["id"],
+                *(row.get(key) for key in keys),
+            ]
+            for row in records
+        ),
+    )
+
+
+def timestamp(text):
+    if text is None:
+        return None
+    return (
+        datetime.fromisoformat(text)
+        .astimezone(timezone.utc)
+        .strftime("%Y-%m-%d %H:%M:%S")
     )
 
 
 def detail(record):
-    fields(
-        f"{record['kind'].title()}: {record['id']}",
-        {
+    launches = record.get("launches", [])
+    info = {
+        "Type / Status": f"{record['kind']} / {record['status']}",
+        **{
             key.title(): record[key]
-            for key in (
-                "kind",
-                "status",
-                "name",
-                "method",
-                "dataset",
-                "seed",
-                "tags",
-                "note",
-                "created",
-                "ended",
-            )
+            for key in ("method", "dataset", "seed", "name", "tags", "note")
             if record.get(key) is not None and record[key] != "" and record[key] != []
         },
-    )
+    }
+    selection, protocol, times, notices, counts = {}, {}, {}, {}, {}
+    for key, title in (("result_source", "Result selection"), ("source", "Source")):
+        if record.get(key):
+            selection[title] = record[key]
+    for key, item in record.get("protocol", {}).items():
+        protocol[f"Protocol.{key}"] = item
+    started = launches[0].get("started") if launches else record.get("created")
+    ended = record.get("ended") or (launches[-1].get("ended") if launches else None)
+    if started:
+        times["Started (UTC)"] = timestamp(started)
+    if ended:
+        times["Ended (UTC)"] = timestamp(ended)
+    error = record.get("error")
+    if len(launches) <= 1:
+        error = error or (launches[0].get("error") if launches else None)
+        if error:
+            notices["Error"] = error
+    elif error and error != launches[-1].get("error"):
+        notices["Error"] = error
     if record.get("status_note"):
-        notice = (
+        notices["Notice"] = (
             "Unfinished launch records exist; current activity is unknown."
             if record["kind"] == "study" and record["status"] == "unconfirmed"
             else record["status_note"]
         )
-        message(notice, style="yellow")
+    if "trials" in record:
+        counts.update(record.get("trial_counts", {}))
+        counts["Unfinished trials"] = record.get("unfinished_trials", [])
+    fields(
+        f"{record['kind'].title()}: {record['id']}",
+        [info, selection, protocol, times, notices, counts],
+    )
     if record.get("result"):
         table("Results", ("Metric", "Value"), record["result"].items())
-    for key, title in (
-        ("result_source", "Result selection"),
-        ("source", "Source"),
-        ("protocol", "Protocol"),
-    ):
-        if record.get(key):
-            fields(title, record[key])
-    if record.get("error"):
-        fields("Error", {"Reason": record["error"]})
-    launches = record.get("launches", [])
-    if launches:
+    if len(launches) > 1:
         table(
             "Launch history",
-            ("Launch", "Status", "Started", "Ended", "Resume source"),
+            ("Launch", "Status", "Time (UTC)", "Resume source"),
             (
                 (
                     r["number"],
                     r["status"],
-                    r.get("started"),
-                    r.get("ended"),
+                    f"Start {value(timestamp(r.get('started')))}\n"
+                    f"End   {value(timestamp(r.get('ended')))}",
                     r.get("resume"),
                 )
                 for r in launches
@@ -116,11 +145,6 @@ def detail(record):
         if errors:
             fields("Launch errors", errors)
     if "trials" in record:
-        fields(
-            "Trials overview",
-            record.get("trial_counts", {})
-            | {"Unfinished": record.get("unfinished_trials", [])},
-        )
         table(
             "Trials",
             ("Trial", "Status", "Value", "Parameters", "Run ID", "Retry of"),
@@ -204,11 +228,19 @@ def summary(result, metric):
 def paired(result, metric):
     fields(
         f"Paired comparison · {metric}",
-        {
-            "Test": result["test"],
-            "Alternative": result["alternative"],
-            "Pairs": result["pairs"],
-        },
+        [
+            {
+                "Test": result["test"],
+                "Alternative": result["alternative"],
+                "Pairs": result["pairs"],
+            },
+            {
+                "Mean difference (left − right)": result["mean_difference"],
+                "p-value": result["p_value"],
+                "Status": result["status"],
+                **({"Reason": result["reason"]} if "reason" in result else {}),
+            },
+        ],
     )
     table(
         "Descriptive statistics",
@@ -217,15 +249,6 @@ def paired(result, metric):
             (side.title(), result[side]["mean"], result[side]["std"])
             for side in ("left", "right")
         ],
-    )
-    fields(
-        "Test result",
-        {
-            "Mean difference (left − right)": result["mean_difference"],
-            "p-value": result["p_value"],
-            "Status": result["status"],
-            **({"Reason": result["reason"]} if "reason" in result else {}),
-        },
     )
 
 
@@ -238,18 +261,8 @@ class RunDisplay:
     def start(self, run, *, supervised=False):
         self.run = run
         self.started = monotonic()
-        fields(
-            f"Starting {run.meta['kind']}: {run.meta['id']}",
-            {
-                "Method": run.config.method,
-                "Device": run.config.device,
-                "Output": run.directory,
-                **(
-                    {"Checkpoint": run.meta["source"]["checkpoint"]}
-                    if (run.meta.get("source") or {}).get("checkpoint")
-                    else {}
-                ),
-            },
+        message(
+            f"Starting {run.meta['kind']} · {run.meta['id']} · {run.config.method} · {run.config.device}"
         )
         if supervised:
             self.total = run.config.train.epochs
@@ -284,13 +297,9 @@ class RunDisplay:
             self.progress.stop()
             self.progress = None
         record = self.run.meta
-        fields(
-            f"Finished {record['kind']}: {record['id']}",
-            {
-                "Status": record["status"],
-                "Output": self.run.directory,
-                **({"Error": record["error"]} if record.get("error") else {}),
-            },
-        )
+        text = f"{record['status'].title()} {record['kind']} · {record['id']} · saved to {self.run.directory}"
+        if record.get("error"):
+            text += f" · {record['error']}"
+        message(text)
         if record["status"] == "completed" and record.get("result"):
             table("Results", ("Metric", "Value"), record["result"].items())
