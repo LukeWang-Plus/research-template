@@ -17,6 +17,9 @@ evaluation = "held-out-v1"
 
 [params]
 lr = 0.05
+optimizer = "sgd"
+momentum = 0.0
+hidden = 0
 
 [train]
 epochs = 3
@@ -33,6 +36,10 @@ type = "float"
 low = 0.001
 high = 0.08
 log = true
+
+[search.space."params.hidden"]
+type = "categorical"
+choices = [0, 4]
 
 [search.sampler]
 strategy = "tpe"

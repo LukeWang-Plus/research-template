@@ -249,15 +249,75 @@ def test_weighted_evaluation_and_custom_loop(tmp_path):
     c = cfg(tmp_path, "ragged")
     runner.prepare(c, tmp_path)
     runner.execute(c, id="custom", root=tmp_path)
+    target = tmp_path / "experiments/runs/custom"
+    assert ragged.load_state(checkpoint(target, "last"))["memory"].epoch == 3
     extended = c.model_copy(update={"train": c.train.model_copy(update={"epochs": 4})})
     runner.execute(extended, id="custom", resume=True, root=tmp_path)
+    assert ragged.load_state(checkpoint(target, "last"))["memory"].epoch == 4
     runner.test(c, source="custom", id="custom-test", root=tmp_path)
+    runner.test(
+        c, external=checkpoint(target, "last"), id="custom-external", root=tmp_path
+    )
+    assert (
+        read_json(tmp_path / "experiments/runs/custom-external/record.json")["result"][
+            "mse"
+        ]
+        < 0.01
+    )
     assert (
         read_json(tmp_path / "experiments/runs/custom-test/record.json")["result"][
             "mse"
         ]
         < 0.01
     )
+
+
+def test_ragged_search(tmp_path):
+    values, _ = ragged.evaluate(
+        torch.nn.Identity(), [{"observations": [0.0], "target": 2.0}], "cpu"
+    )
+    assert values == {"mse": 4.0}
+    c = cfg(tmp_path, "ragged")
+    runner.prepare(c, tmp_path)
+    for optimizer, hidden, count in (("sgd", 0, 2), ("adam", 4, 13)):
+        params = {
+            "params.lr": 0.02,
+            "params.optimizer": optimizer,
+            "params.hidden": hidden,
+        }
+        if optimizer == "sgd":
+            params["params.momentum"] = 0.5
+        actual = tuning.sample(c, optuna.trial.FixedTrial(params))
+        assert actual.params["optimizer"] == optimizer
+        assert ("momentum" in actual.params) == (optimizer == "sgd")
+        assert c.params["momentum"] == 0.0
+        runner.execute(actual, id=optimizer, root=tmp_path)
+        target = tmp_path / "experiments/runs" / optimizer
+        final = read_json(target / "record.json")["result"]
+        assert sum(p.numel() for p in ragged.network(actual).parameters()) == count
+        rows = [row for row in history(target) if row["split"] == "validation"]
+        assert final == rows[-1]["metrics"]
+        saved = read_json(target / "checkpoint.json")
+        best_mse = min(row["metrics"]["mse"] for row in rows)
+        assert saved["top"][0]["score"] == best_mse
+        assert ragged.objective(actual, target, None) == best_mse + 0.001 * count
+
+    tuning.tune(c, trials=1, id="custom-search", root=tmp_path)
+    study = optuna.load_study(
+        study_name="custom-search",
+        storage=tuning.storage(tmp_path / "experiments/studies/custom-search"),
+    )
+    trial = study.trials[0]
+    target = tmp_path / "experiments/runs" / trial.user_attrs["run_id"]
+    rows = [row for row in history(target) if row["split"] == "validation"]
+    count = 2 if trial.params["params.hidden"] == 0 else 13
+    expected = min(row["metrics"]["mse"] for row in rows) + 0.001 * count
+    assert trial.value == expected
+    assert trial.intermediate_values == {
+        row["epoch"]: row["metrics"]["mse"] for row in rows
+    }
+    atomic(target / "record.json", {"result": {"mse": 123.0}})
+    assert ragged.objective(c, target, None) == expected
 
 
 def test_optuna_fail_retry_continue_prune_export(tmp_path, monkeypatch):

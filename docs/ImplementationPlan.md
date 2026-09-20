@@ -185,3 +185,10 @@ Q137–Q151 及统一开始/结束摘要的补充讨论已收敛。用户确认�
 - 已确认保留现状：Optuna 统计标签不转换大小写；空 Unfinished trials 行不隐藏。不得按相同错误文本合并不同启动/运行。
 - Q158 已实施：实验列表将 Name 与 ID 合并为 Experiment 列，名称在上、完整 ID 在下；无名称时仅显示 ID。其余列保留，窄终端允许必要换行，不增加配置或截断规则。至此本轮展示精修讨论已收敛。
 - 用户后续授权后，已按上述文档完成展示层和测试修改。Ruff 格式/lint、19 项 pytest 通过；验证包括两个启动相同错误分别保留、100 列示例的完整 ID、空分组跳过及 Optuna 标签/空项保持。未改记录、导出或计算，未提交或推送。
+
+
+### ragged 自定义能力示例扩充（已实施）
+
+- 用户确认本示例可调整采样与目标语义，授权扩充：`memory` 使用模块级 `Memory` 对象保存轮数；方法级 `load_state` 显式以 `weights_only=False` 读取可信 checkpoint，恢复与测试共用加载入口。旧版不含 memory 的 checkpoint 不自动迁移，续训请使用新运行产物。
+- `suggest` 选择 SGD/Adam，仅 SGD 采样 momentum；`objective` 经后续讨论确认改为最佳验证 MSE 加 `0.001 × 参数量`，不再使用最后一轮指标或 MSE/MAE 加权和；直接读取最佳 MSE checkpoint 的验证指标及权重数量，不重新构建模型。新增 `hidden = 0 / 4` 的小型网络搜索，早停、checkpoint 排名和剪枝仍使用 MSE。保留原有自定义循环、剪枝及 checkpoint 管理，未改公共核心或依赖。配置同步，README 仅调整原有一句介绍，保留必要可信来源提示。
+- 本地验证：Ruff 格式/lint、20 项 pytest（MPLBACKEND=Agg）及两个示例 CPU 训练/恢复/测试 smoke 通过；覆盖特殊对象续训、来源/外部 checkpoint 测试、两种优化器条件采样及实际调参目标。首次回归因新增测试重复准备数据失败，改为只准备一次后通过。后续加权目标调整已通过 Ruff 及 20 项 pytest，补充 MSE/MAE 数值、加权目标和排名/剪枝仍使用 MSE 的断言；该调整未重跑 smoke。随后参数量惩罚方案已通过 Ruff、20 项 pytest（Agg）及两个示例 CPU smoke；覆盖两种网络的参数量、最佳 MSE 与惩罚合成、排名/剪枝仍使用 MSE，README 未再扩充。未运行 GPU、CI 或外部平台；未提交。

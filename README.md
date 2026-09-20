@@ -59,7 +59,7 @@ The terminal shows a completion summary and a metric table. The saved test recor
 
 Data preparation refuses to overwrite existing example data. Skip that command on subsequent runs. Use a new run ID for a new experiment; omit `--id` to generate one automatically.
 
-A second example, `configs/ragged.toml`, demonstrates regression over variable-length dictionary data using a fully custom training loop.
+A second example, `configs/ragged.toml`, demonstrates regression over variable-length dictionary data using a fully custom training loop and custom state loading; only load its checkpoints from trusted sources.
 
 ## Project Layout
 
