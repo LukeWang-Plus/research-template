@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from core import analysis, records, runner
+from core import analysis, plotting, records, runner
 from core.config import Train, load
 from core.records import checkpoint, checkpoint_info, history, read_json
 from methods import linear
@@ -82,7 +82,7 @@ def test_final_only_and_dataset_identity(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="Incompatible dataset"):
         analysis.summary(["a1", "different-protocol"], "score", root=tmp_path)
     with pytest.raises(ValueError, match="No committed"):
-        analysis.curves(["a1"], "score", split="validation", root=tmp_path)
+        plotting.curves(["a1"], "score", split="validation", root=tmp_path)
 
 
 def test_completed_and_checkpoint_launch_configurations(tmp_path, monkeypatch):
@@ -195,7 +195,7 @@ def test_explicit_special_loader_and_metadata_only_queries(tmp_path, monkeypatch
     assert analysis.table(
         ["special-test", "special-external"], "accuracy", root=tmp_path
     )
-    fig = analysis.curves(["special"], "accuracy", split="validation", root=tmp_path)
+    fig = plotting.curves(["special"], "accuracy", split="validation", root=tmp_path)
     assert list(fig.axes[0].lines[0].get_ydata()) == [99.0, 98.0]
 
 

@@ -383,10 +383,23 @@ Grid 复用 search.space 的 categorical/choices，所有搜索参数及有限�
 
 ### 8.3 绘图默认值与入口
 
-- 学习曲线的 split 与 metric 在 CLI/Python 公共入口均明确必填，不默认 train 或 validation；默认画布 6×4 英寸、无标题、横轴 Epoch、纵轴指标名、图例 run ID。默认监督历史保留训练及验证，绘图不重跑实验。
-- 混淆矩阵画布保留 5×4 英寸，内部矩阵等比例；标题为 `Confusion Matrix`。
-- 导出 DPI 默认 300，可通过 Python `save_figure(..., dpi=300)` 与 CLI `plot --dpi` 覆盖；PDF 矢量内容不因 DPI 变成高分辨率位图。
-- 目标路径明确指定，PNG/PDF 由后缀确定；标题、标签、尺寸沿用少量参数与返回图对象调整，不新增绘图配置系统。覆盖规则统一见第 6.3 节。
+本节设计已实施，模块拆分、样式调用及本地验证状态见 ImplementationPlan 第 8 节。
+
+- 绘图、基础样式及图片导出集中在 `core/plotting.py`，查询与统计留在 `core/analysis.py`。绘图复用既有结果读取、可比性检查及统计计算，返回 Matplotlib Figure；CLI 只转换参数并调用相同函数。仅作功能模块拆分，不新增绘图基类、配置文件、主题注册器或预测文件协议。
+- SciencePlots、Colorcet、tueplots 均为直接依赖，保持其他锁定版本及 PyTorch 来源不变。前两者用于基础样式；tueplots 仅在 Notebook 中演示原生配置，不进入默认绘图流程或 CLI，不建立会议预设映射。
+- CLI 与 Python/Notebook 绘图默认在局部原生样式上下文中应用基础样式，无需初始化调用。导入及绘图不改变进程级默认值，不强制后端。基础外观尽量沿用 `science` / `no-latex`；只明确分类与连续配色、6×4 英寸画布及下述导出默认值，不另行固定线宽、刻度、边框、网格、图例或留白。布局沿用样式设置或显式 layout，不自动切换布局引擎。
+- 绘图优先级为基础样式 < 显式 style < 显式绘图参数 < 返回对象的手动修改。`style=None` 表示使用基础样式；显式 style 使用 Matplotlib 原生样式名称、配置字典或其组合，叠加时只覆盖指定字段；figsize、layout、cmap 等显式参数优先。任意外围 rc_context 不保证优先于基础样式，不追踪设置来源，不增加基础样式开关或继承模式。
+- 默认使用 Matplotlib MathText，方法名称、标题及标签可通过 `$...$` 表达常用上下标和希腊字母，无需安装外部 LaTeX。需要完整 LaTeX 时，Notebook 通过 `style={"text.usetex": True}` 显式启用，并由使用者准备工具链；不解析或改写标签，不在渲染失败后自动切换模式。
+- 基础画布 6×4 英寸用于通用实验查看，不代表单栏或双栏投稿尺寸。投稿时通过 tueplots 原生 bundle 显式覆盖尺寸、字体及字号；未包含的字段保留基础值。不同投稿模板的具体要求由研究者核实，不承诺任意 bundle 都保留配色。
+- 学习曲线 `curves` / `research plot` 的 split 与 metric 明确必填；每个 run 一条线，不平滑、不做多 seed 曲线聚合。默认无标题、横轴 Epoch、纵轴指标名、图例 run ID；labels 可按输入顺序覆盖显示名称。自定义 step 的含义由调用者通过 xlabel 说明。
+- `bars(series, metric, ...)` 的 series 为按柱排列的运行 ID 列表的列表，可由调用者程序化取得，但绘图不自动分组或使用实验组全部成员。CLI `research bars --runs "A1 A2 A3" --runs "B1 B2 B3" --label A --label B --metric accuracy --destination ...`；每个 --runs 用空格分隔同一根柱的运行 ID。labels 缺省使用运行 ID 组合，显式名称须逐柱对应；不覆盖记录名称。
+- 柱状图复用既有结果读取、可比性及汇总规则：所有运行完成且有明确结果来源；各柱内部同方法/训练配置、seed 唯一，整图数据集/协议一致；拒绝重复使用运行。多运行柱显示均值 ±1 样本标准差（ddof=1），单运行无误差棒；不要求不同柱的方法、配置、seed 集合或样本数相同，不作配对检验。不增加更多比较约束，也不认证科研公平性。纵轴包含零，不截断误差棒、不自动排序；纵轴标签默认指标名，柱宽默认 0.65，可通过 width 覆盖；误差棒与留白沿用样式设置。
+- 图内仅保留图表正文、图例、坐标轴名称和标题，不自动附加样本数、误差定义等说明文字，相关解释由论文正文或图注承担。柱状图及混淆矩阵横轴标签默认水平排列。
+- 曲线和柱状图按输入顺序使用 Colorcet Glasbey 分类色板，默认提供 256 色，柱子不使用渐变值编码；不随机选色或随对象数量重新采样分类色。颜色循环不足时沿用 Matplotlib 原生循环，不报数量错误、不自动扩色或替换用户色板。跨图颜色一致由调用者保持相同输入顺序或显式配色；不承诺 Glasbey 的全部分类色在色盲视角下均可区分。
+- 混淆矩阵 `classification` 保留 Python 数组入口和 Confusion Matrix 标题，内部等比例，不增加 CLI 预测加载协议。默认使用低值浅、高值深的 Colorcet `CET_CBL2_r` 顺序色图，针对常见红绿色觉缺陷设计；与分类色独立，通过统一字体、背景及排版保持图表协调。显式 style 的 image.cmap 或显式 cmap 可覆盖。颜色范围从零开始；色条标注 Count 并使用整数刻度；按单元格实际背景亮度选择黑/白文字。labels 指定完整且不重复的类别及顺序，不接受遗漏观测类别。只显示原始计数，不归一化或自动排序显式类别。
+- CLI 曲线/柱状图使用基础样式，提供 --label、--width/--height、--xlabel/--ylabel 和已有 title/dpi/destination/overwrite；尺寸单位为英寸，数学标签支持 MathText。高级配色、tueplots 及图对象调整留给 Notebook，不增加 CLI 会议或主题选项。
+- `save_figure` 只支持 PNG/PDF，默认在局部上下文应用同一基础样式及导出设置：300 DPI、PDF TrueType 字体、savefig.bbox=None。显式 style 叠加覆盖保存时读取的设置，显式 dpi 优先；dpi=None 使用叠加后的 savefig.dpi。需要会议导出设置时，绘图和保存分别传入同一个 bundle，不在 Figure 上附加隐式样式记录，不重新绘图或改写已有图对象。tight 裁切可能改变实际尺寸；PDF 矢量元素不因 DPI 提高清晰度。路径及覆盖规则见第 6.3 节；不自动生成多份文件。
+- `notebooks/paper_figures.ipynb` 用明确标注的内存演示数据，演示 tueplots 会议、期刊原生配置通过 style 叠加，以及保存时再次指定配置；不训练、不伪造实验记录、不建立会议配置映射。示例注明预设对应年份，不保证满足未来投稿要求。
 
 ## 9. 验证与后续落实
 

@@ -158,6 +158,15 @@ wheels = [
 ]
 
 [[package]]
+name = "colorcet"
+version = "3.2.1"
+source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
+sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/3f/af/b969f541242b84cbbacabdf20862e487689e352bf0f02f90df2795d29da5/colorcet-3.2.1.tar.gz", hash = "sha256:48d9a67e6e59dc5c0a965aa1b46fe5d59cdc95cc36a95949f29313f950ac59f7", size = 2202958, upload-time = "2026-04-28T16:25:37.43Z" }
+wheels = [
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/1b/24/e95471ae93c08d3606c9c7343cf65d490f154daa88b50581957a0aa780f4/colorcet-3.2.1-py3-none-any.whl", hash = "sha256:3f6fde13cef2169222dd5fe2a2bf847c02d644470fdf167ed566f6421df470f7", size = 262291, upload-time = "2026-04-28T16:25:35.365Z" },
+]
+
+[[package]]
 name = "colorlog"
 version = "6.12.0"
 source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
@@ -1208,6 +1217,7 @@ name = "research"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "colorcet" },
     { name = "filelock" },
     { name = "ipykernel" },
     { name = "matplotlib" },
@@ -1215,10 +1225,12 @@ dependencies = [
     { name = "optuna" },
     { name = "pydantic" },
     { name = "rich" },
+    { name = "scienceplots" },
     { name = "scipy" },
     { name = "tomlkit" },
     { name = "torch", version = "2.7.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "torch", version = "2.7.1+cu118", source = { registry = "https://download.pytorch.org/whl/cu118" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "tueplots" },
     { name = "typer" },
 ]
 
@@ -1241,6 +1253,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "colorcet", specifier = ">=3.2.1" },
     { name = "filelock", specifier = ">=4.0.0" },
     { name = "ipykernel", specifier = ">=7.3.0" },
     { name = "matplotlib", specifier = ">=3.11.2" },
@@ -1248,12 +1261,14 @@ requires-dist = [
     { name = "optuna", specifier = ">=5.0.0" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "rich", specifier = ">=15.0.0" },
+    { name = "scienceplots", specifier = ">=2.2.2" },
     { name = "scipy", specifier = ">=1.18.1" },
     { name = "swanlab", marker = "extra == 'swanlab'", specifier = ">=0.10.0" },
     { name = "tensorboard", marker = "extra == 'tensorboard'", specifier = ">=2.21.0" },
     { name = "tomlkit", specifier = ">=0.15.1" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = "==2.7.1", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torch", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = "==2.7.1", index = "https://download.pytorch.org/whl/cu118" },
+    { name = "tueplots", specifier = ">=0.2.4" },
     { name = "typer", specifier = ">=0.27.2" },
     { name = "wandb", marker = "extra == 'wandb'", specifier = ">=0.30.0" },
 ]
@@ -1301,6 +1316,18 @@ wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/3d/02/7f10ef4700bc223c30a3fdd10631a29830c45524b810a3c7ed947af64591/ruff-0.16.8-py3-none-win32.whl", hash = "sha256:55793ba85c69921e89be061426d91a78652d6e50317c962240922747a4eb713f", size = 10093472, upload-time = "2026-09-16T15:54:37.47Z" },
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/1e/5d/a509c07d714b6da88f2c518b4637cf6f1d46b074be8f0f1e5fb9ff5126fe/ruff-0.16.8-py3-none-win_amd64.whl", hash = "sha256:a6b85621fd3c81e31fc5f5add09c9c078b430db3595ca632efafdec9e64ebfaa", size = 10586899, upload-time = "2026-09-16T15:54:40.488Z" },
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/fe/a0/50787329e4f20bf9dc9f6230015d46ec69c51a97ace5bc202dae4755365d/ruff-0.16.8-py3-none-win_arm64.whl", hash = "sha256:d075e820af612102ce217f07cc93e69f9490b10ec13ea85fa87bd03d996cef8a", size = 10386316, upload-time = "2026-09-16T15:54:43.332Z" },
+]
+
+[[package]]
+name = "scienceplots"
+version = "2.2.2"
+source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
+dependencies = [
+    { name = "matplotlib" },
+]
+sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/50/05/73a19270d548caadf145b0fc8ab94a8c716faeca528c254a4192676e048b/scienceplots-2.2.2.tar.gz", hash = "sha256:d46ce7170b4160265c777a48f73a0db1fdff8460f59a0ded0e364acb139ab115", size = 19692, upload-time = "2026-06-23T07:32:50.693Z" }
+wheels = [
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/5d/ff/6469a5cabf230ebc94f927246874136098dde1aacc9328bc40dceb24ba13/scienceplots-2.2.2-py3-none-any.whl", hash = "sha256:f63d04e6ec11fe2036ec120feb6c2f1d84b7c38e96cc7edcde7208064653af98", size = 33394, upload-time = "2026-06-23T07:32:49.594Z" },
 ]
 
 [[package]]
@@ -1586,6 +1613,18 @@ dependencies = [
 ]
 wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/24/5f/950fb373bf9c01ad4eb5a8cd5eaf32cdf9e238c02f9293557a2129b9c4ac/triton-3.3.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9999e83aba21e1a78c1f36f21bce621b77bcaa530277a50484a7cb4a822f6e43", size = 155669138, upload-time = "2025-05-29T23:39:51.771Z" },
+]
+
+[[package]]
+name = "tueplots"
+version = "0.2.4"
+source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "numpy" },
+]
+wheels = [
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/b6/5b/dc9e79200e7e5b4795a242b777729ccf8687be9025c14bca403a6182e2c2/tueplots-0.2.4-py3-none-any.whl", hash = "sha256:aafe4ff0727ab127f2665488d070fd2df3fb3dff876c8cf3cfe6091d144744aa", size = 18016, upload-time = "2026-03-24T08:34:42.267Z" },
 ]
 
 [[package]]

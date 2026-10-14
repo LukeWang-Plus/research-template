@@ -6,6 +6,8 @@
 
 新增终端展示与显式 JSON 保存已按授权实施：需求见 PRD 第 5.10 节，展示约束见 Architecture 第 2.4 节，实现与验证见 ImplementationPlan 第 7 节。英文用户 README 已同步实际用法；此前 CI 结果不冒充本次变更已通过 CI。
 
+本地绘图设计已实施：保留三类图，绘图与查询统计作功能模块拆分，CLI/Notebook 默认局部应用同一基础样式，高级覆盖及保存通过显式 style 完成。CLI、Notebook 示例及测试已同步；需求见 PRD §5.8，技术边界见 Architecture §8.3，实施与验证状态见 ImplementationPlan §8。
+
 建议依次阅读 [产品需求](PRD.md)、[技术架构](Architecture.md) 和 [实施计划](ImplementationPlan.md)。当前公共包为 `core/`、CLI 为 `research`，命名与固定 PyTorch 约束见技术架构。旧方案只供参考，不构成新设计约束；其中 DeepBench 的历史称呼保留，不代表当前命名。
 
 ## 文档清单与职责

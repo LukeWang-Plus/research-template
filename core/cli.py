@@ -6,7 +6,7 @@ from typing import Annotated
 
 import typer
 
-from core import analysis, display, groups, runner, tuning
+from core import analysis, display, groups, plotting, runner, tuning
 from core.config import ROOT, load, path
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
@@ -283,16 +283,67 @@ def plot(
     metric: Annotated[str, typer.Option()],
     destination: Annotated[str, typer.Option()],
     split: Annotated[str, typer.Option()],
+    labels: Annotated[list[str] | None, typer.Option("--label")] = None,
+    width: Annotated[float, typer.Option(min=0.1)] = 6,
+    height: Annotated[float, typer.Option(min=0.1)] = 4,
+    xlabel: str = "Epoch",
+    ylabel: str | None = None,
     title: str | None = None,
     dpi: int = 300,
     overwrite: bool = False,
     output: str = "experiments",
     root: Root = ROOT,
 ):
-    fig = analysis.curves(
-        ids, metric, split=split, title=title, output=output, root=root
+    fig = plotting.curves(
+        ids,
+        metric,
+        split=split,
+        title=title,
+        output=output,
+        root=root,
+        labels=labels,
+        figsize=(width, height),
+        xlabel=xlabel,
+        ylabel=ylabel,
     )
-    saved = analysis.save_figure(
+    saved = plotting.save_figure(
+        fig, destination, dpi=dpi, overwrite=overwrite, root=root
+    )
+    display.message(f"Saved figure: {saved}")
+
+
+@app.command()
+def bars(
+    runs: Annotated[
+        list[str],
+        typer.Option("--runs", help="Repeat per bar; quote space-separated run IDs"),
+    ],
+    metric: Annotated[str, typer.Option()],
+    destination: Annotated[str, typer.Option()],
+    labels: Annotated[list[str] | None, typer.Option("--label")] = None,
+    width: Annotated[float, typer.Option(min=0.1)] = 6,
+    height: Annotated[float, typer.Option(min=0.1)] = 4,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    title: str | None = None,
+    dpi: int = 300,
+    overwrite: bool = False,
+    output: str = "experiments",
+    root: Root = ROOT,
+):
+    """Compare final metrics; multiple seeds show mean ± sample standard deviation."""
+    fig = plotting.bars(
+        [ids.split() for ids in runs],
+        metric,
+        labels=labels,
+        figsize=(width, height),
+        xlabel=xlabel,
+        ylabel=ylabel,
+        title=title,
+        output=output,
+        root=root,
+    )
+    saved = plotting.save_figure(
         fig, destination, dpi=dpi, overwrite=overwrite, root=root
     )
     display.message(f"Saved figure: {saved}")

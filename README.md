@@ -10,7 +10,7 @@ Use the built-in supervised training loop for conventional experiments, or write
 - **Training and evaluation:** epoch-level recovery, validation-based Top-K checkpoints, optional early stopping, and independent test runs.
 - **Hyperparameter search:** single-objective Optuna studies with TPE or grid sampling, optional median pruning, and explicit failed-trial retries.
 - **Multi-seed experiments:** lightweight experiment groups, selective testing, and aggregate statistics.
-- **Analysis:** result tables, paired significance tests, learning curves, and PNG/PDF export from saved results.
+- **Analysis:** result tables, paired significance tests, learning curves, final-metric bars with sample-standard-deviation error bars, confusion matrices, and PNG/PDF export.
 - **Flexible execution:** shared Python and CLI entry points for notebooks, local machines, and cluster jobs.
 - **Optional integrations:** TensorBoard, Weights & Biases, and SwanLab. Local recording is always enabled.
 
@@ -347,26 +347,79 @@ Select `ttest` or `wilcoxon` explicitly. Both tests are two-sided and report the
 
 ### Plot saved metrics
 
+Plotting works without TensorBoard, W&B, or SwanLab. SciencePlots supplies the base appearance; Colorcet supplies Glasbey categorical colors and the sequential colormap for confusion matrices. CLI and Python/Notebook plotting use the same base style automatically, without an initialization call or process-wide style changes. All three plotting functions return native Matplotlib figures for further customization.
+
 ```bash
 uv run research plot first-run \
-    --metric accuracy \
-    --split validation \
-    --destination experiments/reports/curve.png
+    --metric accuracy --split validation \
+    --label Baseline --ylabel Accuracy \
+    --width 3.4 --height 2.5 \
+    --destination experiments/reports/curve.pdf
 ```
 
-Both the metric and split are required. Use `--metric loss --split train` for training loss. Figures default to 300 DPI; change this with `--dpi`, or use a `.pdf` destination for PDF output. Tables, figures, and configuration exports refuse existing destinations unless `--overwrite` is provided.
+Both metric and split are required. Use `--metric loss --split train` for training loss. Each run produces one curve, without smoothing or multi-seed aggregation. Repeat `--label` in the same order as run IDs, or omit labels to show IDs. Custom histories recorded with `step` use those coordinates; specify `--xlabel` to describe their meaning.
 
-Python plotting functions return Matplotlib figures for further customization:
+Use `research bars` to compare final metrics. Each quoted `--runs` argument supplies the run IDs for one bar; it does not refer to an experiment-group ID:
+
+```bash
+uv run research bars \
+    --runs "A_SEED_1 A_SEED_2 A_SEED_3" \
+    --runs "B_SEED_1 B_SEED_2 B_SEED_3" \
+    --label Baseline --label Proposed \
+    --metric accuracy --ylabel Accuracy \
+    --destination experiments/reports/comparison.pdf
+```
+
+Replace the uppercase IDs with completed runs. Each multi-run bar shows the mean ± one **sample standard deviation** (`ddof=1`), not a confidence interval. A single-run bar shows its value without an error bar. Runs within each bar must have one method/training setup and distinct seeds; all bars must share compatible dataset/protocol identifiers. Repeated run IDs are rejected. Different bars can have different methods, configurations, seed sets, and sample counts. No ranking or significance test is performed. Sample counts and error-bar explanations are not added to the figure; describe them in your paper or caption.
+
+Both commands accept `--title`, `--xlabel`, `--ylabel`, and `--width`/`--height` in inches (default 6×4). This is a general inspection size, not a prescribed single-column or full-width publication size. Label counts must match curves/bars. Colors follow input order; keep that order consistent across figures or customize the native color cycle. Glasbey provides 256 categorical colors; shorter custom cycles repeat using Matplotlib's native behavior, without an automatic palette replacement. Glasbey does not guarantee that every color is distinguishable for all forms of color-vision deficiency.
+
+Python uses the same functions:
 
 ```python
-from core.analysis import curves, save_figure
+from core import plotting
 
-fig = curves(["first-run"], "accuracy", split="validation", title="Validation accuracy")
-fig.axes[0].set_ylabel("Accuracy")
-save_figure(fig, "experiments/reports/curve-paper.pdf")
+fig = plotting.bars(
+    [["A_SEED_1", "A_SEED_2"], ["B_SEED_1", "B_SEED_2"]],
+    "accuracy",
+    labels=["Baseline", "Proposed"],
+    figsize=(3.4, 2.5),
+    ylabel="Accuracy",
+)
+plotting.save_figure(fig, "experiments/reports/comparison.pdf")
 ```
 
-Python exports accept `overwrite=True` when replacement is intended. Plotting reads saved results and does not rerun a model. `core.analysis.classification(targets, predictions)` provides a confusion matrix for class labels, not raw logits.
+Confusion matrices accept one-dimensional class labels, not probabilities or logits. Convert model outputs explicitly in research code. This helper has a Python/Notebook entry point; the template does not assume a common prediction-file format:
+
+```python
+fig = plotting.classification(
+    ["cat", "cat", "dog", "dog"],
+    ["cat", "dog", "dog", "dog"],
+    labels=["cat", "dog"],
+)
+plotting.save_figure(fig, "experiments/reports/confusion.pdf")
+```
+
+The matrix shows raw counts with black/white annotations chosen for contrast. Colorcet `CET_CBL2_r` maps low counts to light colors and high counts to dark colors, with a blue progression designed for common red-green color-vision deficiencies. It is independent of the categorical palette. `labels` specifies the full class set/order and must include all observed classes without duplicates. The default canvas is 6×4 inches; an explicit `figsize` overrides it. `cmap` accepts native Matplotlib colormap names or objects.
+
+Base settings mostly follow SciencePlots. Advanced customization is available in Python/Notebooks: base style < explicit `style` < explicit drawing arguments < manual Figure/Axes changes. A style overrides only the fields it supplies. Pass external settings through `style`; an enclosing `plt.rc_context(...)` is not guaranteed to override base settings. Drawing and saving use local style contexts rather than changing global defaults.
+
+For example, customize the categorical colors at creation, then adjust an individual axis:
+
+```python
+import matplotlib.pyplot as plt
+
+style = {"axes.prop_cycle": plt.cycler(color=["#0072B2", "#D55E00"])}
+fig = plotting.bars(series, "accuracy", style=style)
+fig.axes[0].set_ylabel("Accuracy")
+plotting.save_figure(fig, "experiments/reports/custom-bars.pdf", style=style)
+```
+
+Mathematical labels use Matplotlib's built-in MathText without requiring an external LaTeX installation, for example `labels=[r"Baseline $\alpha$", r"Proposed $\beta$"]`. Full LaTeX rendering can be enabled explicitly with `style={"text.usetex": True}` after preparing the required tools; rendering errors do not trigger an automatic fallback.
+
+The [paper_figures.ipynb](notebooks/paper_figures.ipynb) example demonstrates tueplots conference/journal sizing and typography with synthetic data. Pass the native bundle through `style` when drawing and again when saving. Bundles override only their own fields and do not necessarily define colors. Check the actual submission instructions for the target venue/year. Venue adaptation is not part of the default plotting flow or CLI.
+
+Export to `.png` or `.pdf`. Saving locally applies base export defaults: 300 DPI, PDF TrueType fonts, and no tight cropping. An explicit saving `style` overrides those defaults; explicit `dpi` takes precedence (`--dpi` on the CLI). Saving does not retain the drawing style implicitly or restyle an existing figure. Tight cropping may change saved dimensions; set `savefig.bbox=None` in the saving style when exact canvas size matters. PDF vector elements are resolution-independent. Existing files require `--overwrite` or Python `overwrite=True`. Plotting does not change source records or rerun models.
 
 ## Adding a Method
 

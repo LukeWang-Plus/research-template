@@ -13,7 +13,7 @@ from filelock import Timeout
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from core import analysis, groups, runner, tuning
+from core import analysis, groups, plotting, runner, tuning
 from core.cli import app
 from core.config import ROOT, Config, Pruning, changed, dumps, load
 from core.platforms import PlatformError
@@ -528,10 +528,10 @@ def test_groups_queries_statistics_and_saved_plots(tmp_path, monkeypatch):
         destination="experiments/reports/table.csv",
         root=tmp_path,
     )
-    fig = analysis.curves(members, "accuracy", split="validation", root=tmp_path)
-    analysis.save_figure(fig, "experiments/reports/curve.png", root=tmp_path)
-    analysis.save_figure(
-        analysis.classification([0, 1], [0, 0]),
+    fig = plotting.curves(members, "accuracy", split="validation", root=tmp_path)
+    plotting.save_figure(fig, "experiments/reports/curve.png", root=tmp_path)
+    plotting.save_figure(
+        plotting.classification([0, 1], [0, 0]),
         "experiments/reports/confusion.pdf",
         root=tmp_path,
     )
@@ -550,8 +550,8 @@ def test_groups_queries_statistics_and_saved_plots(tmp_path, monkeypatch):
         root=tmp_path,
     )
     with pytest.raises(FileExistsError):
-        analysis.save_figure(fig, "experiments/reports/curve.png", root=tmp_path)
-    analysis.save_figure(
+        plotting.save_figure(fig, "experiments/reports/curve.png", root=tmp_path)
+    plotting.save_figure(
         fig, "experiments/reports/curve.png", dpi=100, overwrite=True, root=tmp_path
     )
     atomic(tmp_path / "input.toml", dumps(c))

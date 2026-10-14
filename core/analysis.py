@@ -1,4 +1,4 @@
-"""Queries and plots read saved results only; no method imports or reruns."""
+"""Queries and statistics read saved results only; no method imports or reruns."""
 
 import csv
 import json
@@ -8,7 +8,7 @@ import numpy as np
 from scipy import stats
 
 from core.config import ROOT, load, path
-from core.records import atomic, history, identifier, locked, read_json, snapshot
+from core.records import atomic, identifier, locked, read_json, snapshot
 
 
 def list_records(output="experiments", *, root=ROOT, kind=None, **filters):
@@ -169,6 +169,11 @@ def table(
 
 def summary(ids, metric, *, output="experiments", root=ROOT):
     values = rows(ids, metric, output=output, root=root)
+    return _summary(values)
+
+
+def _summary(values):
+    """Share the existing multi-seed checks and calculation with bar plots."""
     compatible(values)
     if len({row["seed"] for row in values}) != len(values) or any(
         (row["method"], row["setup"]) != (values[0]["method"], values[0]["setup"])
@@ -247,85 +252,6 @@ def paired(left, right, metric, *, test, output="experiments", root=ROOT):
         raise ValueError("Statistical test returned an undefined p-value")
     result["p_value"] = float(statistic.pvalue)
     return result
-
-
-def curves(
-    ids,
-    metric,
-    *,
-    split,
-    output="experiments",
-    root=ROOT,
-    title=None,
-    figsize=(6, 4),
-    xlabel="Epoch",
-    ylabel=None,
-):
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(figsize=figsize)
-    for id in ids:
-        values = [
-            row
-            for row in history(path(output, root) / "runs" / identifier(id))
-            if row["split"] == split
-        ]
-        if not values:
-            raise ValueError(f"No committed {split} history for {id}")
-        ax.plot(
-            [row["epoch"] if "epoch" in row else row["step"] for row in values],
-            [row["metrics"][metric] for row in values],
-            label=id,
-        )
-    ax.set(xlabel=xlabel, ylabel=ylabel or metric, title=title)
-    ax.legend()
-    fig.tight_layout()
-    return fig
-
-
-def classification(
-    targets, predictions, *, labels=None, title="Confusion Matrix", figsize=(5, 4)
-):
-    import matplotlib.pyplot as plt
-
-    targets, predictions = np.asarray(targets), np.asarray(predictions)
-    if targets.ndim != 1 or predictions.shape != targets.shape or not len(targets):
-        raise ValueError("Provide nonempty equally-sized class-label vectors")
-    labels = (
-        list(labels)
-        if labels is not None
-        else np.unique(np.concatenate([targets, predictions])).tolist()
-    )
-    index = {value: i for i, value in enumerate(labels)}
-    matrix = np.zeros((len(labels), len(labels)), dtype=int)
-    for true, predicted in zip(targets, predictions, strict=True):
-        matrix[index[true], index[predicted]] += 1
-    fig, ax = plt.subplots(figsize=figsize)
-    image = ax.imshow(matrix, cmap="Blues")
-    fig.colorbar(image, ax=ax)
-    ax.set(
-        xticks=range(len(labels)),
-        yticks=range(len(labels)),
-        xticklabels=labels,
-        yticklabels=labels,
-        xlabel="Predicted",
-        ylabel="True",
-        title=title,
-    )
-    for (i, j), value in np.ndenumerate(matrix):
-        ax.text(j, i, str(value), ha="center", va="center")
-    fig.tight_layout()
-    return fig
-
-
-def save_figure(fig, destination, *, dpi=300, overwrite=False, root=ROOT):
-    target = path(destination, root)
-    if target.suffix.lower() not in (".png", ".pdf"):
-        raise ValueError("Use PNG or PDF")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("wb" if overwrite else "xb") as file:
-        fig.savefig(file, format=target.suffix[1:], dpi=dpi)
-    return target
 
 
 def pretty(value):
