@@ -132,7 +132,7 @@ Local data and experiment outputs are excluded from Git. Maintain any required b
 
 ## Training and Evaluation
 
-CLI training and testing display the run ID, method, and device at the start, followed by the final status, output location, and results or an error at the end. The supervised loop shows an epoch progress bar in an interactive terminal, including elapsed time, training loss, and the validation metric. Slurm logs and redirected output receive one plain-text line per completed epoch instead. Testing has no progress bar; custom loops control their own intermediate display. Optuna retains its native trial output.
+CLI training and testing display the run ID, method, and device at the start, followed by the final status, output location, and results or an error at the end. In an interactive terminal, the supervised loop shows two updating lines: the task name, epoch progress bar, percentage, completed/total epochs, rate in `epoch/s`, and `elapsed < remaining ETA` on the first line; the latest complete epoch's training loss and validation metric on the second. Progress timing covers only the current launch's epoch loop, excluding setup and previous launches. Slurm logs and redirected output receive one plain-text line per completed epoch instead. Testing has no progress bar; custom loops control their own intermediate display. Optuna retains its native trial output.
 
 Presentation does not replace or duplicate experiment records. Final supervised results remain validation-selected, not simply the last epoch's metrics. Python entry points remain quiet by default.
 

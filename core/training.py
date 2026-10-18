@@ -82,7 +82,7 @@ def evaluate(parts: Evaluation, device="cpu"):
     return values, pred, target
 
 
-def train(parts: Training, run, trial=None, *, on_epoch=None):
+def train(parts: Training, run, trial=None, *, on_epoch=None, on_start=None):
     config = run.config
     config.train.require("epochs", "metric", "direction")
     model = parts.model.to(config.device)
@@ -100,6 +100,8 @@ def train(parts: Training, run, trial=None, *, on_epoch=None):
         epoch = run.last["epoch"]
         best, bad = state["early_stop"]["best"], state["early_stop"]["bad"]
     values = run.last["state"].get("validation") if run.last else None
+    if on_start is not None:
+        on_start()
     for epoch in range(epoch + 1, config.train.epochs + 1):
         if config.train.patience is not None and bad >= config.train.patience:
             break

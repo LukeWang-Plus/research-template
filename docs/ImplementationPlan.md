@@ -223,3 +223,13 @@ Q137–Q151 及统一开始/结束摘要的补充讨论已收敛。用户确认�
 - `MPLBACKEND=Agg uv run --no-sync pytest -q`：24 项测试通过，覆盖默认样式、原生 SciencePlots 外观、超过 10 色及短循环、样式和参数优先级、统计边界、MathText、CLI、PNG/PDF 及覆盖保护。SciencePlots 的 7 条上游弃用警告未屏蔽。
 - paper_figures 的 6 个代码单元在 Agg 环境执行通过，包括独立的自定义字体、色图、尺寸及图对象调整示例。quickstart 的 10 个代码单元通过语法检查，新增的自定义配色与柱子纹理单元基于临时保存结果执行通过。示例图形已实际渲染，进程级样式保持不变，未写入 Notebook 输出；未完整运行 quickstart 或验证 Jupyter kernel/UI。
 - 未重跑 GPU、远程 CI 或真实外部平台；未改依赖锁定版本或 PyTorch 来源。
+
+## 9. 默认监督训练进度展示（已实施）
+
+用户确认展示方案并授权实施；字段、分组与计时规则见 Architecture §2.4，英文用户说明已同步。
+
+- 默认监督训练采用两行 Rich 展示，使用原生进度、计数及时间列；任务描述、固定 `epoch/s` 速率与指标行按已确认布局显示。
+- 完整 epoch 保存后的 `on_epoch` / `Progress.update()` 推进保持不变。仅增加默认循环计时起点反馈，并在循环返回或抛错时停止计时；不改训练、验证、恢复、早停、checkpoint 或结果选择。
+- 自定义方法、独立测试、Optuna 及非交互逐 epoch 文本的边界不变；未增加依赖、配置、重复记录或通用展示框架。
+- 本次验证：Ruff 格式化/lint、25 项 pytest（`MPLBACKEND=Agg uv run --no-sync pytest -q`）通过。新增一个聚焦测试检查两行字段与分隔、任务描述、恢复后的完成数和本次速率、延后计时及停止冻结；已有端到端测试确认指标、模型权重和产物数量不因展示改变。SciencePlots 的 7 条上游弃用警告未屏蔽。
+- 未重跑 smoke、GPU、远程 CI、Notebook UI 或真实外部平台。

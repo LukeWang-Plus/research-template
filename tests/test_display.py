@@ -195,7 +195,64 @@ def test_training_feedback_preserves_records(tmp_path, monkeypatch):
         display, "console", Console(file=terminal, force_terminal=True, width=140)
     )
     runner.execute(config, id="terminal", root=tmp_path, display=display.RunDisplay())
-    assert "Epoch " in terminal.getvalue() and "\x1b[" in terminal.getvalue()
+    assert all(
+        text in terminal.getvalue()
+        for text in ("Training", "epoch/s", "ETA", "validation/accuracy=", "\x1b[")
+    )
+
+
+def test_epoch_progress_layout_and_launch_timing(tmp_path, monkeypatch):
+    clock = [0.0]
+    stream = StringIO()
+    monkeypatch.setattr(
+        display,
+        "console",
+        Console(
+            file=stream,
+            force_terminal=True,
+            width=140,
+            get_time=lambda: clock[0],
+        ),
+    )
+    monkeypatch.setattr(display, "monotonic", lambda: clock[0])
+    feedback = display.RunDisplay()
+    feedback.start(
+        SimpleNamespace(
+            config=cfg(tmp_path, train={"epochs": 10, "metric": "accuracy"}),
+            meta={"kind": "train", "id": "resumed"},
+            last={"epoch": 6},
+        ),
+        supervised=True,
+    )
+    assert feedback.progress is None
+    clock[0] = 1000.0
+    feedback.start_epochs()
+    task = feedback.progress.tasks[0]
+    try:
+        assert task.completed == 6 and task.elapsed == 0 and task.speed is None
+        clock[0] = 1002.0
+        feedback.epoch(7, 0.3, 0.7)
+        clock[0] = 1004.0
+        feedback.epoch(8, 0.2, 0.8)
+        assert task.speed == 0.5 and task.time_remaining == 4
+        assert (
+            feedback.progress.columns[0]
+            .render(SimpleNamespace(description="Other task"))
+            .plain
+            == "Other task"
+        )
+        plain = StringIO()
+        Console(file=plain, width=140).print(feedback.progress.get_renderable())
+        lines = plain.getvalue().splitlines()
+        assert len(lines) == 2
+        assert lines[0].startswith("Training ") and "Training ·" not in lines[0]
+        assert "80%" in lines[0] and "8/10 · 0.5 epoch/s ·" in lines[0]
+        assert lines[0].endswith("0:00:04 < 0:00:04 ETA")
+        assert lines[1] == "train/loss=0.2 · validation/accuracy=0.8"
+    finally:
+        feedback.stop_epochs()
+    clock[0] = 5000.0
+    assert task.completed == 8 and not task.finished and task.elapsed == 4
 
 
 def test_custom_failure_and_optuna_output_boundary(tmp_path, monkeypatch):

@@ -4,7 +4,16 @@ from datetime import datetime, timezone
 from time import monotonic
 
 from rich.console import Console
-from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    ProgressColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.table import Table
 from rich.text import Text
 
@@ -252,6 +261,18 @@ def paired(result, metric):
     )
 
 
+class _EpochSpeedColumn(ProgressColumn):
+    def render(self, task):
+        return Text(f"{value(task.finished_speed or task.speed)} epoch/s")
+
+
+class _EpochProgress(Progress):
+    def get_renderables(self):
+        yield from super().get_renderables()
+        for task in self.tasks:
+            yield Text(task.fields["metrics"])
+
+
 class RunDisplay:
     """Optional CLI feedback; custom methods need no display interface."""
 
@@ -260,31 +281,40 @@ class RunDisplay:
 
     def start(self, run, *, supervised=False):
         self.run = run
-        self.started = monotonic()
         message(
             f"Starting {run.meta['kind']} · {run.meta['id']} · {run.config.method} · {run.config.device}"
         )
         if supervised:
             self.total = run.config.train.epochs
             self.metric = run.config.train.metric
-            if console.is_terminal:
-                self.progress = Progress(
-                    TextColumn("Epoch {task.completed}/{task.total}"),
-                    BarColumn(),
-                    TimeElapsedColumn(),
-                    TextColumn("{task.fields[metrics]}"),
-                    console=console,
-                )
-                self.task = self.progress.add_task(
-                    "Training",
-                    total=self.total,
-                    completed=run.last["epoch"] if run.last else 0,
-                    metrics="",
-                )
-                self.progress.start()
+
+    def start_epochs(self):
+        self.started = monotonic()
+        if console.is_terminal:
+            self.progress = _EpochProgress(
+                TextColumn("{task.description}", markup=False),
+                BarColumn(),
+                TaskProgressColumn(),
+                MofNCompleteColumn(),
+                "·",
+                _EpochSpeedColumn(),
+                "·",
+                TimeElapsedColumn(),
+                "<",
+                TimeRemainingColumn(),
+                "ETA",
+                console=console,
+            )
+            self.task = self.progress.add_task(
+                "Training",
+                total=self.total,
+                completed=self.run.last["epoch"] if self.run.last else 0,
+                metrics="",
+            )
+            self.progress.start()
 
     def epoch(self, epoch, loss, score):
-        metrics = f"train/loss={value(loss)}  validation/{self.metric}={value(score)}"
+        metrics = f"train/loss={value(loss)} · validation/{self.metric}={value(score)}"
         if self.progress:
             self.progress.update(self.task, completed=epoch, metrics=metrics)
         else:
@@ -292,10 +322,14 @@ class RunDisplay:
                 f"Epoch {epoch}/{self.total}  elapsed={monotonic() - self.started:.1f}s  {metrics}"
             )
 
-    def finish(self):
+    def stop_epochs(self):
         if self.progress:
+            self.progress.stop_task(self.task)
             self.progress.stop()
             self.progress = None
+
+    def finish(self):
+        self.stop_epochs()
         record = self.run.meta
         text = f"{record['status'].title()} {record['kind']} · {record['id']} · saved to {self.run.directory}"
         if record.get("error"):

@@ -91,12 +91,17 @@ def execute(
                 result = method.run(config, run, Path(root).resolve(), trial)
                 result_source["kind"] = "custom_final"
             else:
-                train(
-                    method.build(config, Path(root).resolve()),
-                    run,
-                    trial,
-                    on_epoch=display.epoch if display else None,
-                )
+                try:
+                    train(
+                        method.build(config, Path(root).resolve()),
+                        run,
+                        trial,
+                        on_epoch=display.epoch if display else None,
+                        on_start=display.start_epochs if display else None,
+                    )
+                finally:
+                    if display:
+                        display.stop_epochs()
                 validation = [
                     row for row in history(target) if row["split"] == "validation"
                 ]
