@@ -304,6 +304,7 @@ class RunDisplay:
                 TimeRemainingColumn(),
                 "ETA",
                 console=console,
+                speed_estimate_period=float("inf"),
             )
             self.task = self.progress.add_task(
                 "Training",

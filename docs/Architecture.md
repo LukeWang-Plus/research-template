@@ -105,6 +105,8 @@ train/loss=0.234567 · validation/accuracy=0.875
 
 任务名称读取 Rich 原生 `task.description`，默认监督训练命名为 `Training`，不在每轮内部切换训练、验证或保存状态。完成数继续由 checkpoint 保存成功后的 `Progress.update()` 推进，恢复时从已保存 epoch 开始；早停或异常不补满进度。计时在训练状态恢复后、epoch 循环开始前启动，在循环退出时停止，不包含模型构建、状态加载及结果整理时间。速率和剩余时间使用 Rich 原生估算，仅基于本次启动，不累计恢复前耗时或另建估算规则。
 
+epoch 级展示显式设置 `speed_estimate_period=float("inf")`，不按时间淘汰速度样本，使长 epoch 也能保留用于估算的样本。估算算法及样本数量限制仍沿用 Rich 原生机制，不承诺完整训练的全程平均速度；通常在本次启动完成两轮后可估算速度和 ETA，第一轮暂时未知。
+
 非交互终端（包括 Slurm 输出、重定向）使用每个完整 epoch 一行的普通文本，不写动态刷新控制字符。失败结束显示错误原因并保持原异常传播；不能展示旧结果为本次成功结果。不增加 batch 级进度或额外计算指标，不改变按完整 epoch 恢复、早停及无操作恢复的既有行为。Optuna 调参保留原生输出，不接管其日志，也不为 trial 自动开启上述训练展示。
 
 实现位于 `core/display.py`：普通函数显示查询表格，`RunDisplay` 仅负责运行摘要和 Rich 进度。CLI 向共享 runner/group 入口显式传入展示对象，Python 默认不启用；默认监督循环通过可选 `on_start` 标记 epoch 循环计时起点，`on_epoch` 仍仅反馈已保存轮次，runner 在循环返回或抛错时停止进度计时。自定义方法自行选择进度条、单位、更新时机和显示条件，无新增接口。JSON 导出由 `analysis.save_json` 直接序列化既有返回值。`core/records.py`、平台适配、方法代码和 checkpoint 格式未改。

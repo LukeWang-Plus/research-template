@@ -134,6 +134,8 @@ Local data and experiment outputs are excluded from Git. Maintain any required b
 
 CLI training and testing display the run ID, method, and device at the start, followed by the final status, output location, and results or an error at the end. In an interactive terminal, the supervised loop shows two updating lines: the task name, epoch progress bar, percentage, completed/total epochs, rate in `epoch/s`, and `elapsed < remaining ETA` on the first line; the latest complete epoch's training loss and validation metric on the second. Progress timing covers only the current launch's epoch loop, excluding setup and previous launches. Slurm logs and redirected output receive one plain-text line per completed epoch instead. Testing has no progress bar; custom loops control their own intermediate display. Optuna retains its native trial output.
 
+Speed and ETA use Rich's native estimator without time-based sample expiry, subject to its sample-count limit. Estimation normally becomes available after two epochs complete in the current launch.
+
 Presentation does not replace or duplicate experiment records. Final supervised results remain validation-selected, not simply the last epoch's metrics. Python entry points remain quiet by default.
 
 ### Resume or restart
