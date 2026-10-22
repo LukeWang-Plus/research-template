@@ -1,28 +1,39 @@
 # Research
 
-A lightweight PyTorch template for individual research projects. Research provides a shared workflow for training, hyperparameter search, experiment tracking, evaluation, and result analysis while leaving data structures and algorithms under the researcher's control.
+**A lightweight, workflow-complete PyTorch template for empirical machine learning research.**
 
-Use the built-in supervised training loop for conventional experiments, or write a custom loop and adopt the experiment-management utilities as needed. The template is intended to be adapted directly to a project, rather than used as a general-purpose training framework.
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch 2.7.1](https://img.shields.io/badge/PyTorch-2.7.1-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![uv](https://img.shields.io/badge/Managed_with-uv-DE5FE9?logo=astral&logoColor=white)](https://docs.astral.sh/uv/)
+[![Optuna 5.0+](https://img.shields.io/badge/Optuna-5.0%2B-0068B7)](https://optuna.org/)
+[![Code Style: Ruff](https://img.shields.io/badge/Code_Style-Ruff-261230?logo=ruff&logoColor=white)](https://docs.astral.sh/ruff/)
+
+**Research** handles the boilerplate of empirical experimentation—local run tracking, checkpoint management, hyperparameter tuning, multi-seed aggregation, statistical testing, and publication-quality plotting—while leaving datasets, models, and training algorithms entirely under your control.
+
+Adopt the built-in supervised training loop for standard experiments, or write a completely custom training loop and call the recording utilities directly. No monolithic `Trainer` subclasses, forced inheritance, or opaque lifecycle hooks required.
+
+---
 
 ## Features
 
-- **Local experiment records:** effective configurations, metrics, checkpoints, execution history, tags, and notes.
-- **Training and evaluation:** epoch-level recovery, validation-based Top-K checkpoints, optional early stopping, and independent test runs.
-- **Hyperparameter search:** single-objective Optuna studies with TPE or grid sampling, optional median pruning, and explicit failed-trial retries.
-- **Multi-seed experiments:** lightweight experiment groups, selective testing, and aggregate statistics.
-- **Analysis:** result tables, paired significance tests, learning curves, final-metric bars with sample-standard-deviation error bars, confusion matrices, and PNG/PDF export.
-- **Flexible execution:** shared Python and CLI entry points for notebooks, local machines, and cluster jobs.
-- **Optional integrations:** TensorBoard, Weights & Biases, and SwanLab. Local recording is always enabled.
+- **Structured Local Tracking:** Automatic recording of resolved TOML configurations, per-epoch/step metric histories, execution logs, checkpoints, tags, and notes under `experiments/`.
+- **Training & Checkpointing:** Epoch-level recovery (`--resume`), validation-ranked Top-$K$ checkpoint retention, configurable early stopping, and isolated test evaluations.
+- **Hyperparameter Search:** Built-in Optuna integration supporting TPE and Grid sampling, Median pruning, failed-trial retries, and one-command best-trial config export.
+- **Multi-Seed Experiment Groups:** Organize and run multi-seed or multi-config sweeps, selectively evaluate checkpoints, and resume interrupted group members.
+- **Statistical Analysis & Paper-Ready Figures:** Side-by-side comparison tables, multi-seed summary statistics ($\text{mean} \pm \text{SD}$), two-sided paired $t$-tests and Wilcoxon signed-rank tests, plus SciencePlots/Colorcet figures exported to PDF or PNG.
+- **Unified Entry Points:** Identical behavior across the `research` CLI, interactive Jupyter notebooks, and Bash/Slurm cluster jobs, with optional TensorBoard, Weights & Biases, and SwanLab integrations.
+
+---
 
 ## Installation
 
-Requirements:
+### Prerequisites
 
-- Python 3.12
-- [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- Windows or Linux
+- **Python 3.12**
+- **[uv](https://docs.astral.sh/uv/getting-started/installation/)**
+- **Windows or Linux**
 
-Clone the repository and install the project environment:
+Clone the repository and synchronize the environment:
 
 ```bash
 git clone https://github.com/LukeWang-Plus/research-template.git
@@ -31,413 +42,368 @@ uv sync
 uv run research --help
 ```
 
-PyTorch is pinned to **2.7.1**. Windows and Linux installations use the **CUDA 11.8** build, which also supports CPU execution. GPU use requires a compatible NVIDIA driver; changing the PyTorch version or installation source should be an explicit environment decision.
+> **Note on PyTorch & GPU Support:** PyTorch is pinned to **2.7.1** (CUDA 11.8 wheel on Windows and Linux, which also runs on CPU out of the box). To use a GPU, ensure a compatible NVIDIA driver is installed and set `device = "cuda:0"` in your configuration or via `--set 'device="cuda:0"'`.
 
-Commands below use Bash syntax and run from the project root. Git Bash can be used on Windows. Other shells may require different quoting for configuration overrides.
+---
 
 ## Quick Start
 
-The included linear classification example uses a small synthetic dataset and requires no downloads or GPU.
+The repository includes two self-contained synthetic examples that run on CPU in seconds without external downloads:
+
+1. **`configs/linear.toml`** — Standard supervised classification using the built-in training loop.
+2. **`configs/ragged.toml`** — Variable-length regression demonstrating a fully custom training loop, conditional hyperparameter sampling, and custom checkpoint serialization.
+
+Run the complete supervised workflow in four commands:
 
 ```bash
-# Prepare the example data once.
+# 1. Generate the synthetic dataset once under data/toy-classification
 uv run research prepare configs/linear.toml
 
-# Train and select checkpoints using the validation metric.
+# 2. Train the model and retain the best validation checkpoint
 uv run research train configs/linear.toml --id first-run
 
-# Evaluate the best checkpoint in a separate test run.
+# 3. Evaluate the best checkpoint on the held-out test split in an isolated run
 uv run research test experiments/runs/first-run/config.toml \
     --source first-run \
     --id first-test
 
-# Inspect the saved results.
+# 4. Inspect the detailed run record and evaluation metrics
 uv run research show first-test
 ```
 
-The terminal shows a completion summary and a metric table. The saved test record reports `"status": "completed"` and contains a `result` dictionary with the evaluation metrics. Training and test outputs are stored separately under `experiments/runs/`.
+- `prepare` never overwrites existing prepared data; skip it on subsequent runs.
+- Omit `--id` on any `train`, `test`, `tune`, or `group create` command to auto-generate a unique timestamped ID.
 
-Data preparation refuses to overwrite existing example data. Skip that command on subsequent runs. Use a new run ID for a new experiment; omit `--id` to generate one automatically.
+---
 
-A second example, `configs/ragged.toml`, demonstrates regression over variable-length dictionary data using a fully custom training loop and custom state loading; only load its checkpoints from trusted sources.
-
-## Project Layout
+## Project Structure
 
 ```text
-core/          Experiment management and the optional supervised loop
-methods/       Research methods, models, and custom loops
-dataio/        Data preparation, loading, and splitting code
-configs/       TOML experiment configurations
-notebooks/     Interactive exploration examples
-scripts/       Bash and Slurm launch scripts
-data/          Local datasets and prepared data
-experiments/   Run records, studies, groups, and exported reports
-tests/         Template checks and CPU/GPU smoke tests
+├── core/          # Experiment management, CLI, analysis, plotting, and optional supervised loop
+├── methods/       # Research methods, model definitions, and custom training loops
+├── dataio/        # Dataset preparation, loading, and splitting logic
+├── configs/       # TOML experiment configurations
+├── notebooks/     # Interactive exploration and publication figure examples
+├── scripts/       # Bash and Slurm launch scripts
+├── data/          # Local datasets (excluded from Git)
+├── experiments/   # Generated runs, Optuna studies, groups, and exported reports (excluded from Git)
+└── tests/         # Template test suite and smoke checks
 ```
 
-Most research-specific changes belong in `methods/`, `dataio/`, and `configs/`. Adding a method does not require changes to the CLI or experiment-management code.
+When adapting this template for your own project, almost all of your work takes place in **`dataio/`**, **`methods/`**, and **`configs/`**.
 
-## Configuration and Data
+### Directory Conventions
 
-### Experiment configuration
+- **Data (`data/`):** Keep immutable raw files under `data/raw/<dataset>/` and write prepared splits to `data/<dataset>/`. Data preparation is always triggered explicitly via `research prepare` so training never silently rebuilds data or alters splits.
+- **Outputs (`experiments/`):** Organized automatically into four subdirectories:
+  - `experiments/runs/` — Individual training and test run directories (`config.toml`, `record.json`, `metrics.jsonl`, `checkpoint.json`, checkpoints, and logs).
+  - `experiments/studies/` — Optuna SQLite databases and study records.
+  - `experiments/groups/` — Multi-seed / multi-config group definitions and member links.
+  - `experiments/reports/` — Exported JSON/CSV tables, selected TOML configs, and PDF/PNG figures.
 
-Start from one of the configurations in `configs/`.
+---
 
-| Field       | Purpose                                                                                          |
-| ----------- | ------------------------------------------------------------------------------------------------ |
-| `method`    | Method name from the mapping in `methods/__init__.py`                                            |
-| `data.name` | Dataset identity used in records and comparisons                                                 |
-| `data.path` | Local data location, when required by the method                                                 |
-| `params`    | Method-specific parameters, such as learning rate and batch size                                 |
-| `train`     | Epoch limit, validation metric, optimization direction, checkpoint retention, and early stopping |
-| `protocol`  | Identifiers for the task, split, metric definitions, and evaluation procedure                    |
-| `seed`      | Explicit experiment seed                                                                         |
-| `device`    | `cpu` by default, or an explicit device such as `cuda:0`                                         |
-| `output`    | Output root; defaults to `experiments`                                                           |
+## Experiment Workflow
 
-Recorded experiments require an explicit seed and dataset identity. The supervised loop also requires `train.epochs`, `train.metric`, and `train.direction` (`min` or `max`). Custom methods only need training fields used by their selected capabilities. In-memory and Hugging Face datasets do not require a placeholder local path; both included examples require `data.path`.
+### Configuration & CLI Overview
 
-Protocol identifiers are declarations supplied by the researcher, not conditions inferred by the template. They should accurately describe the experimental setup.
+Experiments are defined in declarative TOML files under `configs/`:
 
-Use `--set` for small overrides:
+```toml
+method = "linear"
+seed = 42
+device = "cpu"            # "cpu" or "cuda:0", "cuda:1", ...
+output = "experiments"
+name = "tiny classification"
+tags = ["example"]
+
+[data]
+name = "toy-classification"
+path = "data/toy-classification"
+
+[protocol]                # Researcher-declared experimental protocol identifiers
+task = "toy-binary-classification"
+split = "fixed-generator-17-v1"
+metrics = "accuracy-v1"
+evaluation = "held-out-v1"
+
+[params]                  # Method-specific hyperparameters (free-form dict)
+lr = 0.1
+batch_size = 8
+hidden = 0
+scheduler_gamma = 0.95
+
+[train]
+epochs = 4
+metric = "accuracy"       # Validation metric used for checkpoint ranking & pruning
+direction = "max"         # "max" or "min"
+keep_top_k = 1            # Number of best validation checkpoints to keep
+# patience = 5            # Optional early stopping patience (in epochs)
+# min_delta = 0.0         # Minimum improvement required to reset patience
+```
+
+Use `--set KEY=VALUE` on the CLI to override any field using TOML literal syntax (quote string values in Bash):
 
 ```bash
 uv run research train configs/linear.toml \
-    --id lr-test \
+    --id lr-sweep \
     --set params.lr=0.02 \
     --set seed=7 \
     --set 'device="cuda:0"'
 ```
 
-Override values use TOML syntax, including quoted strings. Each execution saves its effective configuration. Relative data and output paths resolve against the project root; absolute paths are also supported. Use `--root /path/to/project` when an explicit root is needed.
+#### CLI Command Reference
 
-### Data organization
+| Category | Command | Description |
+| :--- | :--- | :--- |
+| **Data** | `research prepare <config>` | Run the method's `prepare()` hook to build local dataset splits |
+| **Execution** | `research train <config>` | Run training, save checkpoints, or `--resume` / `--overwrite` a run |
+| | `research test <config>` | Evaluate a checkpoint (`--source <run_id>` or `--external <path>`) |
+| **Tuning** | `research tune <config> --trials N` | Start or continue (`--continuation`) an Optuna hyperparameter study |
+| | `research export <config> <study> <dest>` | Export the best (or `--trial N`) parameters to a new TOML file |
+| **Groups** | `research group create <configs...> --seed S` | Create a multi-seed / multi-config experiment group |
+| | `research group run <config> <group_id>` | Execute group members serially (supports `--action resume\|rerun`) |
+| | `research group test <config> <group_id>` | Evaluate selected group members (`--member <run_id>`) |
+| **Inspection** | `research list` | Filter runs by `--kind`, `--method`, `--dataset`, `--seed`, `--status`, or `--tag` |
+| | `research show <id>` | Display full run, study (`--folder studies`), or group (`--folder groups`) details |
+| | `research annotate <id>` | Attach `--name`, `--tag` (`--clear-tags`), or `--note` to a record |
+| **Analysis** | `research compare <ids...> --metric M` | Compare runs side by side and optionally export `--csv <path>` |
+| | `research summarize <ids...> --metric M` | Compute multi-seed summary statistics ($\text{mean} \pm \text{SD}$, min/max) |
+| | `research paired <metric> --left ... --right ...` | Run a two-sided paired `ttest` or `wilcoxon` significance test |
+| **Plotting** | `research plot <ids...> --metric M --split S` | Plot training or validation learning curves to `.pdf` or `.png` |
+| | `research bars --runs "..." --metric M` | Plot final-metric bar charts with multi-seed standard deviation error bars |
 
-The recommended layout separates original files from prepared datasets without adding an extra `processed/` level:
+---
 
-```text
-data/
-├── raw/
-│   ├── dataset_a/    # Original files
-│   └── dataset_b/
-├── dataset_a/       # Prepared data
-└── dataset_b/
-```
+### Training, Resuming, and Testing
 
-Preprocessing must not overwrite original files. Keep preparation and loading code in `dataio/`, not in the data directory. Hugging Face downloads can remain in their default cache; derived data may be saved under `data/`.
+#### Resuming vs. Overwriting
 
-This layout is a convention, not a requirement. Methods control their own formats and splitting procedures. Training does not automatically rebuild data, change splits, or invalidate cached artifacts. The synthetic examples generate prepared data directly and do not require files in `raw/`.
-
-Local data and experiment outputs are excluded from Git. Maintain any required backups separately.
-
-## Training and Evaluation
-
-CLI training and testing display the run ID, method, and device at the start, followed by the final status, output location, and results or an error at the end. In an interactive terminal, the supervised loop shows two updating lines: the task name, epoch progress bar, percentage, completed/total epochs, rate in `epoch/s`, and `elapsed < remaining ETA` on the first line; the latest complete epoch's training loss and validation metric on the second. Progress timing covers only the current launch's epoch loop, excluding setup and previous launches. Slurm logs and redirected output receive one plain-text line per completed epoch instead. Testing has no progress bar; custom loops control their own intermediate display. Optuna retains its native trial output.
-
-Speed and ETA use Rich's native estimator without time-based sample expiry, subject to its sample-count limit. Estimation normally becomes available after two epochs complete in the current launch.
-
-Presentation does not replace or duplicate experiment records. Final supervised results remain validation-selected, not simply the last epoch's metrics. Python entry points remain quiet by default.
-
-### Resume or restart
-
-Resume an existing run with a higher epoch limit:
+To continue an interrupted run or extend training to more epochs, pass the run's saved `config.toml` with `--resume`:
 
 ```bash
 uv run research train experiments/runs/first-run/config.toml \
     --id first-run \
     --resume \
-    --set train.epochs=6
+    --set train.epochs=8
 ```
 
-The supervised loop resumes from the last saved complete epoch. An interrupted, unsaved epoch is repeated from its beginning; batch-level recovery is not supported. If the checkpoint already reaches the requested epoch limit, the command returns without creating another launch record or opening platform integrations.
+- **`--resume`** restores the latest completed epoch state (`last.pt`) and allows updating `train.epochs`, `device`, and `platforms`. Data, model architecture, and hyperparameters remain locked to preserve experimental validity.
+- **`--overwrite`** permanently deletes the target run directory and starts fresh from scratch:
+  ```bash
+  uv run research train configs/linear.toml --id first-run --overwrite
+  ```
 
-Resuming permits changes to the epoch limit, device, and platform options. Changes to data, model architecture, or training hyperparameters require a new experiment.
+#### Evaluating Checkpoints
 
-To discard a run and start again:
-
-```bash
-uv run research train configs/linear.toml --id first-run --overwrite
-```
-
-**Overwriting deletes the target run's generated contents and cannot be undone.** It is not a recovery operation. Active runs are protected by a writer lock; use a new ID when previous results must remain available.
-
-### Checkpoints and testing
-
-`train.keep_top_k` controls validation-ranked checkpoint retention and defaults to 1. The latest training state is retained separately for recovery. Optional early stopping is disabled by default; enable it with `train.patience` and configure `train.min_delta` as needed.
-
-Testing selects `best` by default. To evaluate another retained checkpoint, use its filename from the run's `checkpoint.json`:
+Testing always creates an independent run record without mutating the training run. By default, `--source` loads the `best` validation checkpoint:
 
 ```bash
+# Evaluate the best checkpoint from a training run
 uv run research test experiments/runs/first-run/config.toml \
     --source first-run \
-    --checkpoint CHECKPOINT_FILE
+    --id first-test
 
-# Evaluate an external checkpoint with an appropriate method configuration.
-uv run research test configs/linear.toml --external /path/to/model.pt
+# Evaluate a specific retained top-k checkpoint filename listed in checkpoint.json
+uv run research test experiments/runs/first-run/config.toml \
+    --source first-run \
+    --checkpoint epoch_0003.pt
+
+# Evaluate an external standalone checkpoint file
+uv run research test configs/linear.toml --external /path/to/weights.pt
 ```
 
-`CHECKPOINT_FILE` is a placeholder. Source-based testing uses the selected checkpoint's training configuration while allowing separate test data and evaluation settings. A failed or interrupted run can still be tested if it has a valid checkpoint. Test results are independent records and do not change the source run's status or weights.
+> **Security Note:** Checkpoints are loaded with `torch.load(..., weights_only=True)` by default. If a custom method implements `load_state(file)` with `weights_only=False` (such as `configs/ragged.toml`), only load checkpoints from trusted sources.
 
-Checkpoint loading uses `weights_only=True` by default. Methods can supply `load_state(file)` for trusted custom formats. Enable unsafe deserialization or remote model code only after verifying its source; loading errors do not trigger an automatic fallback.
+---
 
-## Hyperparameter Search
+### Hyperparameter Search
 
-### Run and continue a study
+Configure search spaces, samplers (`tpe` or `grid`), and pruning (`none` or `median`) under `[search]` in your TOML file:
 
-The example configurations include a learning-rate search space:
+```toml
+[search.sampler]
+strategy = "tpe"          # "tpe" (default) or "grid"
+
+[search.pruning]
+strategy = "median"       # "none" (default) or "median"
+
+[search.space."params.lr"]
+type = "float"            # "float", "int", or "categorical"
+low = 0.01
+high = 0.2
+log = true
+```
+
+Run a study, inspect trial results, and export the winning configuration:
 
 ```bash
+# Run 3 trials in a new study
 uv run research tune configs/linear.toml --id search-demo --trials 3
+
+# Add 2 more trials to the existing study
+uv run research tune configs/linear.toml --id search-demo --continuation --trials 2
+
+# Retry a failed trial (replace N with the trial number)
+uv run research tune configs/linear.toml --id search-demo --continuation --retry N --trials 1
+
+# Inspect study trials and export the best configuration to a new TOML file
 uv run research show search-demo --folder studies
 uv run research export configs/linear.toml search-demo configs/selected.toml
 ```
 
-`--trials` is required and specifies the additional budget for that invocation. The default objective is the best validation value of the configured primary metric. Test results are not used automatically.
+- **Grid Search:** Set `strategy = "grid"` under `[search.sampler]` and define every search parameter with `type = "categorical"` and `choices = [...]`.
+- **Tolerated Trial Exceptions:** Set `search.catch = ["torch.cuda.OutOfMemoryError"]` to mark OOM trials as failed without aborting the study.
 
-Export selects the best completed trial unless `--trial N` is provided. It writes a configuration with study/trial provenance, not model weights, and does not start training.
+---
 
-```bash
-# Add two trials to the same study.
-uv run research tune configs/linear.toml \
-    --id search-demo --continuation --trials 2
+### Multi-Seed Experiment Groups
 
-# Retry a failed trial as a new trial; replace N with its number.
-uv run research tune configs/linear.toml \
-    --id search-demo --continuation --retry N --trials 1
-```
-
-A continued study must retain its method, data, objective, search space, and sampling/pruning configuration. Retrying fixes the parameters already sampled by the failed trial and starts training from scratch. There is no automatic retry or recovery of trials left in `RUNNING` after a process is killed; inspect them before using Optuna's native tools to change their state.
-
-### Sampling
-
-`search.space` supports Optuna `float`, `int`, and `categorical` distributions under `params.*`. Methods may implement `suggest(trial, config_dict)` for conditional or derived parameters, changing only `params`, and `objective(config, run_directory, trial)` for a custom scalar objective.
-
-The sampler is selected through `search.sampler.strategy`: `tpe` by default, or `grid`. Both use the experiment seed, and all trial training runs use that same seed. Exact search trajectories are not guaranteed across process restarts or parallel execution.
-
-TPE exposes five optional parameters in `search.sampler.params`:
-
-| Parameter          | Purpose                                              |
-| ------------------ | ---------------------------------------------------- |
-| `n_startup_trials` | Number of initial trials before model-based sampling |
-| `n_ei_candidates`  | Number of expected-improvement candidates            |
-| `multivariate`     | Joint parameter modeling                             |
-| `group`            | Search-space decomposition for multivariate sampling |
-| `constant_liar`    | Account for running trials during sampling           |
-
-Omitted values follow the installed Optuna version's native defaults; explicit values take precedence. Resolved non-null values are saved in the effective configuration. Native `None` defaults, such as automatic multivariate selection, remain omitted in TOML. Preserve the dependency lockfile for reproducibility. A short study may finish within TPE's startup period; the template does not reduce that period to fit the trial budget.
-
-Grid sampling requires finite categorical candidates for every search parameter. For example, replace the existing sampler and learning-rate search definitions with:
-
-```toml
-[search.sampler]
-strategy = "grid"
-
-[search.space."params.lr"]
-type = "categorical"
-choices = [0.01, 0.05, 0.1]
-```
-
-Remove any TPE parameter table and the replaced distribution's `low`, `high`, or `log` fields. Grid search displays its combination count and stops when exhausted. It does not discretize continuous ranges or switch samplers automatically. Use TPE when the method dynamically introduces search parameters.
-
-### Pruning and tolerated errors
-
-Pruning is disabled by default. To enable Optuna's MedianPruner:
-
-```toml
-[search.pruning]
-strategy = "median"
-
-# Optional overrides; omitted values use native Optuna defaults.
-[search.pruning.params]
-n_startup_trials = 5
-n_warmup_steps = 0
-interval_steps = 1
-n_min_trials = 1
-```
-
-The values above are the defaults in Optuna 5.0.0, not universal research recommendations. The supervised loop reports once per completed epoch, starting at 1; interpret warmup and interval settings in that unit. Custom loops define their own reporting scale and must explicitly implement pruning support. To disable pruning, use `strategy = "none"` and remove the parameter table.
-
-Configure specific tolerated exception types with `search.catch`, for example `search.catch = ["torch.cuda.OutOfMemoryError"]`. A matching exception marks that trial as failed and allows the study to continue. Other exceptions, including SDK errors exposed by enabled tracking integrations, terminate the invocation. Broad `Exception` and `RuntimeError` catches are not accepted.
-
-## Experiment Groups
-
-Groups organize independent runs across configurations and seeds:
+Once you have selected a configuration, use `research group` to run and evaluate across multiple random seeds:
 
 ```bash
+# 1. Create a group across seeds 1, 2, and 3
 uv run research group create configs/selected.toml \
-    --seed 1 --seed 2 --seed 3 --id seeds-demo
+    --seed 1 --seed 2 --seed 3 \
+    --id seeds-demo
+
+# 2. Execute all member runs serially
 uv run research group run configs/selected.toml seeds-demo
+
+# 3. Inspect group status and member run IDs
 uv run research show seeds-demo --folder groups
 
-# Replace MEMBER_ID with a member shown in the group record.
-uv run research group test configs/selected.toml seeds-demo --member MEMBER_ID
+# 4. Evaluate specific completed members (repeat --member for multiple runs)
+uv run research group test configs/selected.toml seeds-demo \
+    --member MEMBER_RUN_1 \
+    --member MEMBER_RUN_2
 ```
 
-Repeat `--member` to select multiple runs. Group testing evaluates each selected member's best checkpoint; use an individual test command for other checkpoints.
+If a group execution is interrupted, re-running `research group run` skips already completed members. Pass `--action resume` to resume interrupted members from their latest checkpoint, or `--action rerun` to overwrite and restart failed members.
 
-Group execution is serial and stops on an error without discarding completed members. Subsequent execution skips completed members. Choose `--action resume` or `--action rerun` explicitly for failed or interrupted members: the former requires a usable checkpoint, while the latter overwrites that member's run.
+---
 
-Group names, tags, and notes are initially empty. Set them through `annotate`:
+## Analysis & Plotting
 
-```bash
-uv run research annotate seeds-demo --folder groups \
-    --name "Multi-seed evaluation" --note "Selected hyperparameters"
-```
+### Inspecting & Annotating Records
 
-For parallel work, launch independent runs from separate terminals or use a scheduler. Small-scale local Optuna concurrency is available by continuing the same study from separate processes. The template does not allocate GPUs or guarantee SQLite concurrency on shared network filesystems.
-
-## Results and Analysis
-
-### Find and annotate runs
+Filter, tag, and export experiment metadata from the terminal:
 
 ```bash
+# Filter runs by kind, method, status, or tag
 uv run research list --kind train --method linear --status completed
-uv run research annotate first-run --tag baseline --note "Initial parameter evaluation"
-uv run research list --tag baseline
-uv run research show first-run
-```
 
-Use `--folder studies` or `--folder groups` to inspect or annotate those records. Names, tags, and notes do not affect experiment calculations.
+# Add tags, a display name, or research notes
+uv run research annotate first-run \
+    --name "Linear Baseline" \
+    --tag baseline \
+    --note "Initial synthetic benchmark"
 
-| Output directory       | Contents                                     |
-| ---------------------- | -------------------------------------------- |
-| `experiments/runs/`    | Training and independent test records        |
-| `experiments/studies/` | Optuna studies and trial associations        |
-| `experiments/groups/`  | Group definitions and member references      |
-| `experiments/reports/` | Exported tables, figures, and configurations |
-
-Run directories contain TOML configurations, `record.json`, metric history, logs, and any checkpoints or method-specific artifacts. An `interrupted` status may be inferred from an inactive writer lock. A study with unfinished launch records is shown as `unconfirmed`, rather than assumed to be active.
-
-### Display and save results
-
-`list` displays a compact experiment table; `show` presents details, results, sources, and execution history. Studies include trial tables and errors, while groups include member states. Missing values appear as `—`; long IDs and text wrap rather than being truncated. Terminal timestamps are displayed in UTC with second-level precision.
-
-Query and analysis commands (`list`, `show`, `compare`, `summarize`, and `paired`) accept `--save PATH.json` to export their complete return value while retaining the readable terminal view:
-
-```bash
+# Export full query or analysis output to JSON while keeping the terminal table view
 uv run research show first-test --save experiments/reports/first-test.json
-uv run research summarize TEST_SEED_1 TEST_SEED_2 \
-    --metric accuracy --save experiments/reports/summary.json
 ```
 
-Replace the uppercase IDs with actual runs. Existing destinations require `--overwrite`. Relative export paths resolve against the project root; saving is explicit, with no automatic report copies. There is no `--json` terminal mode. CSV and figure exports remain available separately.
+`list`, `show`, `compare`, `summarize`, and `paired` all support `--save <path.json>` (add `--overwrite` to replace an existing file).
 
-Terminal numbers use six significant digits, including scientific notation for small values. JSON/CSV exports and experiment records retain their original numeric precision. Exported query results may include derived information and are not necessarily copies of `record.json`. Python return structures and statistical calculations are unchanged.
+### Statistical Comparison
 
-### Compare results
-
-Replace the uppercase IDs below with actual run IDs:
+Compare individual runs, aggregate multi-seed metrics, or run paired significance tests across aligned seeds:
 
 ```bash
+# Side-by-side table comparison (with optional CSV export)
 uv run research compare first-test OTHER_TEST_ID \
-    --metric accuracy --csv experiments/reports/comparison.csv
+    --metric accuracy \
+    --csv experiments/reports/comparison.csv
 
-uv run research summarize TEST_SEED_1 TEST_SEED_2 TEST_SEED_3 \
-    --metric accuracy
+# Multi-seed aggregation (mean, sample SD, min, max) for one method/config across seeds
+uv run research summarize SEED_1_ID SEED_2_ID SEED_3_ID --metric accuracy
 
+# Two-sided paired significance test (--test ttest or --test wilcoxon)
 uv run research paired accuracy \
-    --left A_SEED_1 --left A_SEED_2 \
-    --right B_SEED_1 --right B_SEED_2 \
+    --left BASELINE_SEED_1 --left BASELINE_SEED_2 --left BASELINE_SEED_3 \
+    --right PROPOSED_SEED_1 --right PROPOSED_SEED_2 --right PROPOSED_SEED_3 \
     --test ttest
 ```
 
-Supervised training records expose validation-selected results; custom runs expose their returned final metrics; test records expose their own evaluation results. Different datasets or protocols may be displayed side by side with a warning, but cannot be pooled for aggregation or significance testing.
+### Paper-Ready Plotting
 
-Multi-seed summaries require one method and training configuration with distinct seeds. Paired tests require two disjoint collections with matching, unique seeds and at least two pairs. Matching seeds provide alignment, not proof that a paired design is statistically appropriate.
+Plotting is powered by **Matplotlib**, **SciencePlots**, and **Colorcet** (Glasbey categorical palette and colorblind-safe `CET_CBL2_r` sequential colormap), producing publication-ready `.pdf` or `.png` figures without requiring TensorBoard or cloud services.
 
-Select `ttest` or `wilcoxon` explicitly. Both tests are two-sided and report the pair count, each side's mean and sample standard deviation, the mean difference (left minus right), and the p-value. The template does not choose a test or declare a result significant. For constant paired differences in a t-test or all-zero Wilcoxon differences, descriptive statistics remain available and the test returns `status="not_computed"`, a null p-value, and a reason. Other invalid inputs raise errors.
-
-### Plot saved metrics
-
-Plotting works without TensorBoard, W&B, or SwanLab. SciencePlots supplies the base appearance; Colorcet supplies Glasbey categorical colors and the sequential colormap for confusion matrices. CLI and Python/Notebook plotting use the same base style automatically, without an initialization call or process-wide style changes. All three plotting functions return native Matplotlib figures for further customization.
+#### CLI Plotting
 
 ```bash
+# Plot training or validation learning curves
 uv run research plot first-run \
     --metric accuracy --split validation \
-    --label Baseline --ylabel Accuracy \
+    --label "Baseline" --ylabel "Validation Accuracy" \
     --width 3.4 --height 2.5 \
-    --destination experiments/reports/curve.pdf
-```
+    --destination experiments/reports/learning_curve.pdf
 
-Both metric and split are required. Use `--metric loss --split train` for training loss. Each run produces one curve, without smoothing or multi-seed aggregation. Repeat `--label` in the same order as run IDs, or omit labels to show IDs. Custom histories recorded with `step` use those coordinates; specify `--xlabel` to describe their meaning.
-
-Use `research bars` to compare final metrics. Each quoted `--runs` argument supplies the run IDs for one bar; it does not refer to an experiment-group ID:
-
-```bash
+# Plot multi-seed final metric comparison bars (mean ± 1 sample SD)
 uv run research bars \
-    --runs "A_SEED_1 A_SEED_2 A_SEED_3" \
-    --runs "B_SEED_1 B_SEED_2 B_SEED_3" \
-    --label Baseline --label Proposed \
-    --metric accuracy --ylabel Accuracy \
-    --destination experiments/reports/comparison.pdf
+    --runs "BASE_S1 BASE_S2 BASE_S3" \
+    --runs "PROP_S1 PROP_S2 PROP_S3" \
+    --label "Baseline" --label "Proposed" \
+    --metric accuracy --ylabel "Test Accuracy" \
+    --destination experiments/reports/method_comparison.pdf
 ```
 
-Replace the uppercase IDs with completed runs. Each multi-run bar shows the mean ± one **sample standard deviation** (`ddof=1`), not a confidence interval. A single-run bar shows its value without an error bar. Runs within each bar must have one method/training setup and distinct seeds; all bars must share compatible dataset/protocol identifiers. Repeated run IDs are rejected. Different bars can have different methods, configurations, seed sets, and sample counts. No ranking or significance test is performed. Sample counts and error-bar explanations are not added to the figure; describe them in your paper or caption.
+#### Python & Notebook Plotting API
 
-Both commands accept `--title`, `--xlabel`, `--ylabel`, and `--width`/`--height` in inches (default 6×4). This is a general inspection size, not a prescribed single-column or full-width publication size. Label counts must match curves/bars. Colors follow input order; keep that order consistent across figures or customize the native color cycle. Glasbey provides 256 categorical colors; shorter custom cycles repeat using Matplotlib's native behavior, without an automatic palette replacement. Glasbey does not guarantee that every color is distinguishable for all forms of color-vision deficiency.
-
-Python uses the same functions:
+All plotting functions (`plotting.curves`, `plotting.bars`, and `plotting.classification`) return standard `matplotlib.figure.Figure` objects and accept an optional `style` dictionary or list for local rcParams customization:
 
 ```python
 from core import plotting
 
+# Multi-seed bar comparison
 fig = plotting.bars(
-    [["A_SEED_1", "A_SEED_2"], ["B_SEED_1", "B_SEED_2"]],
+    [["BASE_S1", "BASE_S2", "BASE_S3"], ["PROP_S1", "PROP_S2", "PROP_S3"]],
     "accuracy",
-    labels=["Baseline", "Proposed"],
+    labels=[r"Baseline $\alpha$", r"Proposed $\beta$"],
     figsize=(3.4, 2.5),
     ylabel="Accuracy",
 )
-plotting.save_figure(fig, "experiments/reports/comparison.pdf")
-```
+plotting.save_figure(fig, "experiments/reports/comparison.pdf", overwrite=True)
 
-Confusion matrices accept one-dimensional class labels, not probabilities or logits. Convert model outputs explicitly in research code. This helper has a Python/Notebook entry point; the template does not assume a common prediction-file format:
-
-```python
-fig = plotting.classification(
-    ["cat", "cat", "dog", "dog"],
-    ["cat", "dog", "dog", "dog"],
+# Confusion matrix from 1D ground-truth and predicted class labels
+cm_fig = plotting.classification(
+    targets=["cat", "cat", "dog", "dog"],
+    predictions=["cat", "dog", "dog", "dog"],
     labels=["cat", "dog"],
 )
-plotting.save_figure(fig, "experiments/reports/confusion.pdf")
+plotting.save_figure(cm_fig, "experiments/reports/confusion.pdf", overwrite=True)
 ```
 
-The matrix shows raw counts with black/white annotations chosen for contrast. Colorcet `CET_CBL2_r` maps low counts to light colors and high counts to dark colors, with a blue progression designed for common red-green color-vision deficiencies. It is independent of the categorical palette. `labels` specifies the full class set/order and must include all observed classes without duplicates. The default canvas is 6×4 inches; an explicit `figsize` overrides it. `cmap` accepts native Matplotlib colormap names or objects.
+For conference-specific figure sizing and typography (e.g., NeurIPS/ICML/CVPR bundles via **`tueplots`**, custom palettes, and LaTeX rendering), see **[`notebooks/paper_figures.ipynb`](notebooks/paper_figures.ipynb)**.
 
-Base settings mostly follow SciencePlots. Advanced customization is available in Python/Notebooks: base style < explicit `style` < explicit drawing arguments < manual Figure/Axes changes. A style overrides only the fields it supplies. Pass external settings through `style`; an enclosing `plt.rc_context(...)` is not guaranteed to override base settings. Drawing and saving use local style contexts rather than changing global defaults.
+---
 
-For example, customize the categorical colors at creation, then adjust an individual axis:
+## Adding Your Own Method
 
-```python
-import matplotlib.pyplot as plt
+Registering a new research method requires three steps:
 
-style = {"axes.prop_cycle": plt.cycler(color=["#0072B2", "#D55E00"])}
-fig = plotting.bars(series, "accuracy", style=style)
-fig.axes[0].set_ylabel("Accuracy")
-plotting.save_figure(fig, "experiments/reports/custom-bars.pdf", style=style)
-```
+1. Add your data loading/preparation functions in `dataio/<your_data>.py`.
+2. Create a method module in `methods/<your_method>.py` and register it in `METHODS` inside `methods/__init__.py`.
+3. Create a configuration file in `configs/<your_method>.toml`.
 
-Mathematical labels use Matplotlib's built-in MathText without requiring an external LaTeX installation, for example `labels=[r"Baseline $\alpha$", r"Proposed $\beta$"]`. Full LaTeX rendering can be enabled explicitly with `style={"text.usetex": True}` after preparing the required tools; rendering errors do not trigger an automatic fallback.
+Choose between two integration styles depending on your algorithm:
 
-The [paper_figures.ipynb](notebooks/paper_figures.ipynb) example demonstrates tueplots conference/journal sizing and typography with synthetic data. Pass the native bundle through `style` when drawing and again when saving. Bundles override only their own fields and do not necessarily define colors. Check the actual submission instructions for the target venue/year. Venue adaptation is not part of the default plotting flow or CLI.
+| Integration Mode | Best For | What the Template Handles Automatically | Reference Implementation |
+| :--- | :--- | :--- | :--- |
+| **Supervised Loop** | Standard single-optimizer, epoch-based supervised learning | Epoch loop, progress bar, metric aggregation, Top-$K$ checkpoints, early stopping, `--resume`, Optuna pruning, and platform logging | [`methods/linear.py`](methods/linear.py) |
+| **Custom Loop** | Ragged/non-tensor data, multiple optimizers (GANs/RL), step-based schedules, or custom state | Run directory creation, config snapshotting, and on-demand `run.log()` / `run.save_checkpoint()` helpers | [`methods/ragged.py`](methods/ragged.py) |
 
-Export to `.png` or `.pdf`. Saving locally applies base export defaults: 300 DPI, PDF TrueType fonts, and no tight cropping. An explicit saving `style` overrides those defaults; explicit `dpi` takes precedence (`--dpi` on the CLI). Saving does not retain the drawing style implicitly or restyle an existing figure. Tight cropping may change saved dimensions; set `savefig.bbox=None` in the saving style when exact canvas size matters. PDF vector elements are resolution-independent. Existing files require `--overwrite` or Python `overwrite=True`. Plotting does not change source records or rerun models.
+### Option 1: Built-in Supervised Loop
 
-## Adding a Method
-
-### Supervised methods
-
-Use `methods/linear.py` as a minimal reference:
-
-1. Add a method module under `methods/` and data preparation/loading functions under `dataio/`.
-2. Implement `build(config, root) -> Training`, providing the model, loaders, optimizer, batch function, metric function, and optional scheduler.
-3. Implement `build_test(config, root) -> Evaluation` and `load_checkpoint(model, file, state=None)` for independent testing.
-4. Add the module to `METHODS` in `methods/__init__.py` and create a TOML configuration.
-
-A classification batch function can be written as:
+Implement `build(config, root) -> Training` for training, and `build_test(config, root) -> Evaluation` plus `load_checkpoint(model, file, state=None)` for testing:
 
 ```python
 import torch
+from torch.utils.data import DataLoader
+from core.training import Evaluation, Training
+
+supports_resume = True
+supports_pruning = True
 
 
 def batch(model, data, device):
@@ -445,113 +411,122 @@ def batch(model, data, device):
     logits = model(inputs)
     return {
         "loss": torch.nn.functional.cross_entropy(logits, targets),
-        "weight": len(targets),
-        "predictions": logits,
+        "weight": len(targets),        # Sample (or token) count for exact epoch loss averaging
+        "predictions": logits,         # Concatenated across batches on CPU for metrics()
         "targets": targets,
     }
+
+
+def metrics(predictions, targets):
+    return {"accuracy": (predictions.argmax(1) == targets).float().mean().item()}
+
+
+def build(config, root) -> Training:
+    net = MyModel(config.params).to(config.device)
+    optimizer = torch.optim.AdamW(net.parameters(), lr=config.params["lr"])
+    train_loader, val_loader = ...
+    return Training(net, train_loader, val_loader, optimizer, batch, metrics)
+
+
+def build_test(config, root) -> Evaluation:
+    net = MyModel(config.params)
+    test_loader = ...
+    return Evaluation(net, test_loader, batch, metrics)
+
+
+def load_checkpoint(model, file, state=None):
+    if state is None:
+        state = torch.load(file, map_location="cpu", weights_only=True)
+    model.load_state_dict(state["model"])
 ```
 
-Training requires a scalar mean `loss` and its averaging `weight`; use the number of valid tokens when averaging over tokens rather than samples. Evaluation requires predictions and targets that can be concatenated along dimension 0; loss and weight may be omitted together. The metric function receives the collected CPU tensors and returns a numeric dictionary. If the batch function supplies loss, the metric function must not return another `loss` entry.
+### Option 2: Custom Training Loop
 
-The default loop supports one optimizer and an optional epoch-level scheduler. `Training.eval_batch` can replace the evaluation batch function. Additional stateful components can be supplied through `Training.stateful`; their state and any independent random generators are the method's responsibility.
-
-### Custom loops
-
-Use `methods/ragged.py` as a reference. Implement `run(config, run, root, trial=None)` and return a dictionary of final numeric metrics. Process logs and checkpoints are optional unless the requested capability requires them.
-
-Within the loop, use the recording utilities as needed:
+Implement `run(config, run, root, trial=None) -> dict` to take full control of training while using `run.log()` and `run.save_checkpoint()` as needed:
 
 ```python
-# Values and state are computed by the method.
-run.log({"loss": loss_value}, epoch, split="train")
-run.save_checkpoint(state, epoch, score=validation_score)
+def run(config, run, root, trial=None):
+    # Restore from run.last["state"] if supports_resume = True and resuming
+    for epoch in range(1, config.train.epochs + 1):
+        train_loss = ...
+        val_metrics = {"mse": ...}
+        score = val_metrics[config.train.metric]
+
+        # Record metrics (pass step=... instead of epoch for step-based algorithms)
+        run.log({"loss": train_loss}, epoch, split="train")
+        run.log(val_metrics, epoch, split="validation")
+
+        # Save latest recovery state and update validation-ranked top-k checkpoints
+        run.save_checkpoint({"model": model.state_dict()}, epoch, score=score)
+
+    return val_metrics
 ```
 
-For a non-epoch algorithm, pass `step=updates` instead of an epoch. Ranked checkpoints require an explicit `train.direction`.
+### Optional Method Hooks
 
-- **Recovery:** implement state restoration from `run.last["state"]` and declare `supports_resume = True`.
-- **Pruning:** declare `supports_pruning = True` and use Optuna's reporting and pruning APIs in the loop.
-- **Testing:** implement `test(config, run, root, file, state=None)` and return test metrics.
-- **Custom serialization:** provide `load_state(file)` when trusted artifacts require a different loader.
+| Function / Attribute | Purpose |
+| :--- | :--- |
+| `prepare(config, root)` | Invoked by `research prepare` to preprocess and save dataset splits |
+| `test(config, run, root, file, state=None)` | Custom test evaluation entry point (used when `build_test` is not defined) |
+| `suggest(trial, config_dict)` | Sample conditional or dynamic hyperparameters via Optuna's `trial` object |
+| `objective(config, run_directory, trial)` | Compute a custom scalar objective for Optuna (defaults to best validation metric) |
+| `load_state(file)` | Custom checkpoint deserialization hook for trusted non-standard formats |
+| `supports_resume = True` | Declares that the method supports `--resume` recovery |
+| `supports_pruning = True` | Declares that the method supports Optuna trial pruning |
 
-No Trainer subclass or empty lifecycle hooks are required. Install research-specific dependencies with `uv add` as the project evolves.
+---
 
-## Notebook and Cluster Use
+## Execution Environments & Tracking Integrations
 
-### Notebooks
+### Jupyter Notebooks
 
-Open `notebooks/quickstart.ipynb` with the project's virtual environment as the kernel. `ipykernel` is included in the project dependencies.
-
-Individual model, data, and evaluation functions can be used directly without registering a method or creating an experiment directory. For a recorded experiment, use the same entry point as the CLI:
+`ipykernel` is installed by default. Select the project `.venv` as your notebook kernel and explore **[`notebooks/quickstart.ipynb`](notebooks/quickstart.ipynb)** or run experiments programmatically:
 
 ```python
 from core.config import ROOT, load
 from core.runner import execute
 
-config = load(ROOT / "configs/linear.toml", ["train.epochs=1"])
-run_id = execute(config)  # Requires prepared data; generates a new run ID.
+config = load(ROOT / "configs/linear.toml", ["train.epochs=2"])
+run_id = execute(config)
 ```
 
-Notebook execution is synchronous within the current kernel. Closing the kernel does not leave a managed background job.
+### Bash & Slurm Cluster Jobs
 
-### Bash and Slurm
-
-Both launch scripts require a configuration path:
+Use the included launch scripts in `scripts/` for local batch execution or Slurm clusters:
 
 ```bash
-bash scripts/run.sh configs/my_method.toml --id my-run
-sbatch scripts/train.slurm configs/my_method.toml
+# Local wrapper (forwards extra CLI flags to research train)
+bash scripts/run.sh configs/linear.toml --id batch-run --set 'device="cuda:0"'
+
+# Submit a Slurm job (edit GPU, partition, and time limits in scripts/train.slurm)
+sbatch scripts/train.slurm configs/linear.toml --id slurm-run
 ```
 
-`run.sh` forwards additional arguments to the training command. Submit the Slurm script from the project root after preparing the environment and data. Adjust its CPU/GPU requests, partition, account, and time limit for the cluster. The provided script requests one GPU and a one-day time limit; requesting more GPUs does not enable distributed training.
+When output is redirected to a Slurm log file, interactive progress bars automatically switch to clean, single-line plain-text epoch logs.
 
-## Optional Tracking Integrations
+### Optional Experiment Trackers (TensorBoard, W&B, SwanLab)
 
-Install the desired extras, repeating `--extra` to retain multiple integrations:
+Local recording in `experiments/` is always active. To enable external experiment trackers, install the corresponding optional extras:
 
 ```bash
 uv sync --extra tensorboard --extra wandb --extra swanlab
 ```
 
-Enable TensorBoard through the configuration or an override:
-
-```bash
-uv run research train configs/linear.toml --id tb-demo \
-    --set platforms.tensorboard=true
-uv run tensorboard --logdir experiments/runs/tb-demo
-```
-
-For W&B or SwanLab, authenticate as required by the service and add the corresponding table:
+Enable any combination in your TOML configuration or via `--set`:
 
 ```toml
+[platforms]
+tensorboard = true
+
 [platforms.wandb]
 project = "my-research"
 
-# Enable separately or alongside W&B.
-# [platforms.swanlab]
-# project = "my-research"
+[platforms.swanlab]
+project = "my-research"
 ```
 
-The supervised loop records training and validation metrics against epoch coordinates, with stage-prefixed names. Local records remain available independently of these services.
-
-SDK exceptions propagate as experiment failures. Errors handled internally by an SDK are not intercepted, and successful local recording does not guarantee remote synchronization. Training failures are reported to enabled platforms with failure status and error information; normal completion and pruning are treated as non-failure endings.
-
-## Supported Scope
-
-Windows and Linux CPU workflows have passed CI, and both examples have been exercised locally on an NVIDIA RTX 4090. Linux GPU execution and live W&B/SwanLab service integration have not been verified.
-
-The template targets trusted, individual research workflows. It does not provide automatic GPU allocation, distributed training, built-in AMP control, multi-objective optimization, or automatic repair of failed experiments. Custom methods may implement additional training behavior. Dataset validity, evaluation protocols, statistical assumptions, and research conclusions remain the researcher's responsibility.
-
-To check a local installation without writing into existing experiment directories:
-
 ```bash
-uv run python -m tests.smoke --device cpu
-uv run python -m tests.smoke --device cuda:0
-```
-
-The test suite requires the TensorBoard extra. For a non-interactive environment:
-
-```bash
-uv sync --extra tensorboard
-MPLBACKEND=Agg uv run pytest -q
+# Or enable TensorBoard on the fly for a single run:
+uv run research train configs/linear.toml --id tb-run --set platforms.tensorboard=true
+uv run tensorboard --logdir experiments/runs/tb-run
 ```
