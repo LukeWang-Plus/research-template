@@ -411,8 +411,10 @@ def batch(model, data, device):
     logits = model(inputs)
     return {
         "loss": torch.nn.functional.cross_entropy(logits, targets),
-        "weight": len(targets),        # Sample (or token) count for exact epoch loss averaging
-        "predictions": logits,         # Concatenated across batches on CPU for metrics()
+        "weight": len(
+            targets
+        ),  # Sample (or token) count for exact epoch loss averaging
+        "predictions": logits,  # Concatenated across batches on CPU for metrics()
         "targets": targets,
     }
 
