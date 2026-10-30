@@ -37,8 +37,8 @@ def objective(config, run_directory, trial):
     return state["validation"]["mse"] + 0.001 * parameter_count
 
 
-def prepare(config, root):
-    return toy.prepare(config, root, ragged=True)
+def prepare(config, root, *, overwrite=False):
+    return toy.prepare(config, root, ragged=True, overwrite=overwrite)
 
 
 def network(config):

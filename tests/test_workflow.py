@@ -148,6 +148,61 @@ def test_config_cli_and_protection(tmp_path):
         runner.test(c, source="one", id="two", overwrite=True, root=tmp_path)
 
 
+@pytest.mark.parametrize("method,suffix", [("linear", "pt"), ("ragged", "json")])
+def test_prepare_overwrite(tmp_path, method, suffix):
+    c = cfg(tmp_path, method)
+    target = tmp_path / c.data.path
+    target.mkdir(parents=True)
+    assert runner.prepare(c, tmp_path) == target
+    outputs = [
+        target / f"{split}.{suffix}" for split in ("train", "validation", "test")
+    ]
+    note = target / "README.txt"
+    note.write_text("Dataset notes", encoding="utf-8")
+    outputs[0].unlink()
+    for file in outputs[1:]:
+        file.write_bytes(b"existing data")
+    with pytest.raises(FileExistsError):
+        runner.prepare(c, tmp_path)
+    assert not outputs[0].exists()
+    assert all(file.read_bytes() == b"existing data" for file in outputs[1:])
+
+    assert runner.prepare(c, tmp_path, overwrite=True) == target
+    for file, size in zip(outputs, (48, 20, 20), strict=True):
+        if suffix == "json":
+            assert len(read_json(file)) == size
+        else:
+            assert len(torch.load(file, weights_only=True)["y"]) == size
+
+    atomic(tmp_path / "input.toml", dumps(c))
+    args = ["prepare", "input.toml", "--root", str(tmp_path)]
+    cli = CliRunner()
+    result = cli.invoke(app, args)
+    assert isinstance(result.exception, FileExistsError)
+    outputs[0].write_bytes(b"replace me")
+    result = cli.invoke(app, args + ["--overwrite"])
+    assert result.exit_code == 0, result.output
+    assert "Prepared data:" in result.output
+    assert outputs[0].read_bytes() != b"replace me"
+    assert note.read_text(encoding="utf-8") == "Dataset notes"
+    assert set(target.iterdir()) == {*outputs, note}
+
+
+def test_prepare_optional_overwrite(tmp_path, monkeypatch):
+    c = cfg(tmp_path)
+    calls = []
+
+    def prepare(config, root):
+        calls.append((config, root))
+        return root
+
+    monkeypatch.setattr(linear, "prepare", prepare)
+    assert runner.prepare(c, tmp_path) == tmp_path
+    with pytest.raises(TypeError, match="overwrite"):
+        runner.prepare(c, tmp_path, overwrite=True)
+    assert calls == [(c, tmp_path)]
+
+
 def test_default_resume_lineage_and_independent_test(tmp_path, monkeypatch):
     c = cfg(tmp_path)
     runner.prepare(c, tmp_path)

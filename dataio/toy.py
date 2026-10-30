@@ -5,6 +5,7 @@ import json
 import torch
 
 from core.config import path
+from core.records import check_outputs
 
 
 def location(config, root):
@@ -13,11 +14,16 @@ def location(config, root):
     return path(config.data.path, root)
 
 
-def prepare(config, root, ragged=False):
+def prepare(config, root, ragged=False, *, overwrite=False):
     target = location(config, root)
-    target.mkdir(parents=True, exist_ok=False)
+    splits = [("train", 48), ("validation", 20), ("test", 20)]
+    suffix = "json" if ragged else "pt"
+    check_outputs(
+        (target / f"{split}.{suffix}" for split, _ in splits), overwrite=overwrite
+    )
+    target.mkdir(parents=True, exist_ok=True)
     generator = torch.Generator().manual_seed(17)
-    for split, size in [("train", 48), ("validation", 20), ("test", 20)]:
+    for split, size in splits:
         if ragged:
             rows = []
             for index in range(size):

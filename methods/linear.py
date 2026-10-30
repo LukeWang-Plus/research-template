@@ -10,8 +10,8 @@ supports_resume = True
 supports_pruning = True
 
 
-def prepare(config, root):
-    return toy.prepare(config, root)
+def prepare(config, root, *, overwrite=False):
+    return toy.prepare(config, root, overwrite=overwrite)
 
 
 def model(hidden=0):

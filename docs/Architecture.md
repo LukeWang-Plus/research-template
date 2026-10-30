@@ -133,6 +133,10 @@ epoch 级展示显式设置 `speed_estimate_period=float("inf")`，不按时间�
 
 数据准备、读取和划分使用普通研究函数，由方法调用；不另建数据组件注册框架。配置可以选择数据集与路径，CLI 只传递配置，不为每个数据集添加分支。
 
+数据准备的显式覆盖通过 `research prepare --overwrite` 与 `core.runner.prepare(config, root=ROOT, *, overwrite=False)` 传递。默认调用已有 `prepare(config, root)`；只有请求覆盖时才传入 `overwrite=True`，方法须接受该关键字，否则保留 Python 原生参数错误，不忽略请求或新增能力声明。支持覆盖的方法使用 `prepare(config, root, *, overwrite=False)`。
+
+公共 `core.records.check_outputs(paths, *, overwrite=False)` 检查一组 Path 目标：已存在且未允许覆盖时抛出 FileExistsError；不创建、删除或写入文件，不要求元数据或获取锁。方法在生成与写入前检查完整目标集合，再自行创建目录及写入产物。两个示例共用 dataio/toy.py 的准备函数，只替换各自 train/validation/test 文件；目录可已存在，其他内容保留。实验目录覆盖继续使用现有 records.fresh()，不改其实现或保护语义。数据准备的失败与并发边界见 PRD §5.2。
+
 同一任务的多个数据集可共享规范化读取逻辑，不同原始格式在准备阶段转换；模型专属处理由方法实现。数据集和划分标识进入记录，供筛选与可比性检查，不以通用格式或缓存系统替代研究者选择。
 
 ### 3.4 数据目录推荐约定

@@ -21,8 +21,12 @@ from core.training import evaluate, train
 from methods import get
 
 
-def prepare(config: Config, root=ROOT):
-    return get(config.method).prepare(config, Path(root).resolve())
+def prepare(config: Config, root=ROOT, *, overwrite=False):
+    method = get(config.method)
+    root = Path(root).resolve()
+    if overwrite:
+        return method.prepare(config, root, overwrite=True)
+    return method.prepare(config, root)
 
 
 def execute(

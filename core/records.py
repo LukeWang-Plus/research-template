@@ -33,6 +33,13 @@ def identifier(value=None):
     return value
 
 
+def check_outputs(paths, *, overwrite=False):
+    """Check overwrite permission for output paths without modifying them."""
+    for target in paths:
+        if target.exists() and not overwrite:
+            raise FileExistsError(target)
+
+
 def atomic(file: Path, value, *, torch_file=False):
     file.parent.mkdir(parents=True, exist_ok=True)
     tmp = file.with_name(file.name + ".tmp")

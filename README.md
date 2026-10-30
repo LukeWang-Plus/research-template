@@ -71,7 +71,7 @@ uv run research test experiments/runs/first-run/config.toml \
 uv run research show first-test
 ```
 
-- `prepare` never overwrites existing prepared data; skip it on subsequent runs.
+- `prepare` does not overwrite existing prepared data by default; skip it on subsequent runs.
 - Omit `--id` on any `train`, `test`, `tune`, or `group create` command to auto-generate a unique timestamped ID.
 
 ---

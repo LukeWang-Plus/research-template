@@ -30,9 +30,15 @@ def config(file, overrides, root):
 
 
 @app.command()
-def prepare(file: Path, root: Root = ROOT, set: Overrides = None):
+def prepare(
+    file: Path,
+    root: Root = ROOT,
+    set: Overrides = None,
+    overwrite: bool = False,
+):
     """Explicitly prepare data; existing prepared data is never silently rebuilt."""
-    display.message(f"Prepared data: {runner.prepare(config(file, set, root), root)}")
+    target = runner.prepare(config(file, set, root), root, overwrite=overwrite)
+    display.message(f"Prepared data: {target}")
 
 
 @app.command()

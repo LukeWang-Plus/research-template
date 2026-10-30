@@ -239,3 +239,12 @@ Q137–Q151 及统一开始/结束摘要的补充讨论已收敛。用户确认�
 用户确认速度样本不按时间淘汰，参数及估算边界见 Architecture §2.4。代码与英文用户说明已同步；训练、完成数推进及恢复逻辑不变。
 
 本轮在既有模拟时钟测试中参数化覆盖每轮 2 秒、60 秒的恢复场景，检查首轮估计未知、后续速率和 ETA、两行输出及停止冻结。7 项展示 pytest、受影响文件的 Ruff 格式化/lint 及 `git diff --check` 通过；未重跑完整 pytest、smoke、GPU、远程 CI 或真实外部平台。
+
+## 10. 数据准备显式覆盖（已实施）
+
+用户确认方案并授权实施；行为见 PRD §5.2，公共检查与方法接入见 Architecture §3.3。
+
+- core.records 增加 check_outputs，CLI/Python prepare 传递显式 overwrite；两个示例在写入前检查完整目标集合，只替换自己的生成文件。
+- 现有双参数 prepare 方法在默认调用下保持可用，请求未支持的覆盖时直接报错。
+- 本地验证：tests/test_workflow.py 的 10 项 pytest（MPLBACKEND=Agg）通过，覆盖两个示例的空目录准备、全部目标预检、Python/CLI 显式覆盖、无关文件保留、双参数方法兼容，以及既有实验覆盖和训练流程。SciencePlots 的 7 条上游弃用警告未屏蔽。
+- 受影响 Python 文件的 Ruff 格式化/lint 与 git diff --check 通过；本轮未运行完整 pytest、独立 smoke、GPU 或远程 CI。
