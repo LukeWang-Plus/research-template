@@ -46,6 +46,11 @@ class Platforms(Strict):
     swanlab: dict[str, Any] | None = None
 
 
+class Storage(Strict):
+    remote: str | None = None
+    enabled: bool = True
+
+
 class Pruning(Strict):
     strategy: Literal["none", "median"] = "none"
     params: dict[str, int] = Field(default_factory=dict)
@@ -122,6 +127,7 @@ class Config(Strict):
     params: dict[str, Any] = Field(default_factory=dict)
     train: Train = Field(default_factory=Train)
     platforms: Platforms = Field(default_factory=Platforms)
+    storage: Storage | None = None
     search: Search = Field(default_factory=Search)
     seed: int = Field(ge=0, le=2**32 - 1)
     device: str = Field(default="cpu", pattern=r"^(cpu|cuda:[0-9]+)$")

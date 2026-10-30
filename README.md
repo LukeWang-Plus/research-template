@@ -22,6 +22,7 @@ Adopt the built-in supervised training loop for standard experiments, or write a
 - **Multi-Seed Experiment Groups:** Organize and run multi-seed or multi-config sweeps, selectively evaluate checkpoints, and resume interrupted group members.
 - **Statistical Analysis & Paper-Ready Figures:** Side-by-side comparison tables, multi-seed summary statistics ($\text{mean} \pm \text{SD}$), two-sided paired $t$-tests and Wilcoxon signed-rank tests, plus SciencePlots/Colorcet figures exported to PDF or PNG.
 - **Unified Entry Points:** Identical behavior across the `research` CLI, interactive Jupyter notebooks, and Bash/Slurm cluster jobs, with optional TensorBoard, Weights & Biases, and SwanLab integrations.
+- **Optional Artifact Storage:** Sync datasets, runs, studies, and groups across local machines and remote GPU servers via `rclone`, with automatic post-task uploads, lightweight analysis-only downloads, and full artifact restores.
 
 ---
 
@@ -172,6 +173,8 @@ uv run research train configs/linear.toml \
 | | `research paired <metric> --left ... --right ...` | Run a two-sided paired `ttest` or `wilcoxon` significance test |
 | **Plotting** | `research plot <ids...> --metric M --split S` | Plot training or validation learning curves to `.pdf` or `.png` |
 | | `research bars --runs "..." --metric M` | Plot final-metric bar charts with multi-seed standard deviation error bars |
+| **Storage** | `research storage upload <config> <kind>` | Upload `datasets` (`--source`), `runs`, `studies`, or `groups` (`--id`) |
+| | `research storage download <config> <kind>` | Download analysis records or full artifacts (`--full`) via `rclone` |
 
 ---
 
@@ -188,7 +191,7 @@ uv run research train experiments/runs/first-run/config.toml \
     --set train.epochs=8
 ```
 
-- **`--resume`** restores the latest completed epoch state (`last.pt`) and allows updating `train.epochs`, `device`, and `platforms`. Data, model architecture, and hyperparameters remain locked to preserve experimental validity.
+- **`--resume`** restores the latest completed epoch state and allows updating `train.epochs`, `device`, `platforms`, and non-research `storage` settings. Data, model architecture, and hyperparameters remain locked to preserve experimental validity.
 - **`--overwrite`** permanently deletes the target run directory and starts fresh from scratch:
   ```bash
   uv run research train configs/linear.toml --id first-run --overwrite
@@ -532,3 +535,92 @@ project = "my-research"
 uv run research train configs/linear.toml --id tb-run --set platforms.tensorboard=true
 uv run tensorboard --logdir experiments/runs/tb-run
 ```
+
+---
+
+## Optional Artifact Storage
+
+When developing locally and running experiments on remote GPU servers or clusters, you can sync datasets and experiment artifacts through any [rclone](https://rclone.org/install/)-supported storage backend without keeping full checkpoints on every machine.
+
+### Configuration & Automatic Uploads
+
+Install `rclone` on machines that transfer artifacts and configure a remote via `rclone config` (credentials remain managed by `rclone`, never stored in experiment configs). Then add a project remote root to your TOML configuration:
+
+```toml
+[storage]
+remote = "archive:research/project-a"
+```
+
+- **End-of-Task Uploads:** Defining `[storage]` enables automatic uploads (`enabled = true` by default) after a top-level `prepare`, `train`, `test`, `tune`, `group run`, or `group test` finishes normally, including early stopping.
+  - Studies and groups upload once when the top-level command completes rather than after each trial or member; failed or pruned trials within a completed study are uploaded with their actual status.
+  - For `research prepare` to auto-upload, the method's `prepare(config, root)` hook must return the explicit target directory containing the prepared dataset artifacts; that directory is uploaded in full without scanning `data/` or assuming `data.path` holds all outputs (use manual dataset uploads for artifacts split across multiple directories). When automatic upload is disabled, methods keep their existing return-value contract.
+- **No Implicit Transfers:** Failed or interrupted top-level tasks do not auto-upload, tasks never auto-download at startup, and inspection, analysis, and plotting commands (`list`, `show`, `compare`, `summarize`, `paired`, `plot`, `bars`) never trigger network transfers.
+- **Disabling & Config Snapshots:** Omit `[storage]` or set `storage.enabled = false` (or pass `--set storage.enabled=false` on any execution command, including `group run` and `group test`, which read `[storage]` from the top-level config passed to the command) to disable automatic uploads; `rclone` is not required when transfers are unused. Storage settings are saved in config snapshots as non-research fields: they do not affect experiment comparability and can be modified during `--resume`, `tune --continuation`, or `--source` testing. Note that a downloaded config with `[storage]` enabled will upload again when used to run a new task.
+
+### Manual CLI & Python Transfers
+
+Manual transfers work even when automatic upload is disabled:
+
+```bash
+# Upload a run (--overwrite explicitly authorizes replacing an existing remote object)
+uv run research storage upload configs/linear.toml runs --id first-run
+uv run research storage upload configs/linear.toml runs --id first-run --overwrite
+
+# Upload a study or group (includes its own records plus existing associated member runs)
+uv run research storage upload configs/linear.toml studies --id search-demo
+uv run research storage upload configs/linear.toml groups --id seeds-demo
+
+# Download lightweight analysis records (default) to the configured output directory
+uv run research storage download configs/linear.toml studies --id search-demo
+uv run research storage download configs/linear.toml runs --id first-run
+
+# Restore all artifacts (including checkpoints), replacing an existing local directory
+uv run research storage download configs/linear.toml runs --id first-run --full --overwrite
+
+# Transfer datasets (always requires an explicit local directory and transfers all files)
+uv run research storage upload configs/linear.toml datasets --source data/toy-classification
+uv run research storage download configs/linear.toml datasets --destination data/toy-classification --full
+```
+
+- **Datasets (`datasets`):** Require an explicit `--source` or `--destination` directory and always transfer in full. Remote IDs default to `data.name`; pass `--id <custom_id>` (e.g., `--id dataset-a-split-v2`) to store multiple dataset variants without changing `data.name` in the research config.
+- **Runs, Studies, and Groups (`runs`, `studies`, `groups`):** Every run—including trials and group members—is stored independently under its run ID. Studies and groups store their own records and reference member run IDs rather than duplicating member directories, so individual runs can be updated or downloaded on their own. Pass `--root` for paths relative to another checkout, or `--set 'storage.remote="other:research/project-a"'` to override the remote path.
+
+You can also invoke transfers from Python or Jupyter notebooks:
+
+```python
+from core.config import load
+from core.storage import download, format_results, upload
+
+config = load("configs/linear.toml")
+results = upload(config, "runs", "first-run", overwrite=True)
+print(format_results(results))
+
+results = download(config, "studies", "search-demo", analysis_only=True)
+print(format_results(results))
+```
+
+`upload()` and `download()` return per-object `TransferResult` entries (`success`, `failed` with error details, or `not_attempted`). Batch transfers stop at the first failure without rolling back already published objects. Manual CLI commands exit with a non-zero status on failure. Automatic upload failures raise `TransferError` (attaching the per-object results) *after* local computation records are finalized—completed training or preparation results remain intact, so you can retry the upload directly without re-running computation.
+
+### Analysis-Only vs. Full Downloads
+
+| Download Mode | Included Files | Local Overwrite Behavior (`--overwrite`) |
+| :--- | :--- | :--- |
+| **Analysis-Only** *(default)* | **Runs:** `config.toml`, `config-N.toml`, `record.json`, `metrics-N.jsonl`, `checkpoint.json`, `log.txt`<br>**Groups:** `record.json`, member `.toml` configs, and associated run analysis records<br>**Studies:** `config.toml`, `config-N.toml`, `record.json`, `study.sqlite3`, and associated trial run analysis records | Updates only known analysis files in place and preserves any existing local checkpoints or custom large artifacts |
+| **Full Restore** (`--full` / `analysis_only=False`) | Complete directory contents, including currently retained `.pt` checkpoints (`last` and Top-$K$), predictions, TensorBoard logs, and custom method files *(required for `datasets`)* | Downloads to a temporary sibling directory first and swaps on success; a failed download leaves the existing local directory intact |
+
+- Analysis-only downloads provide everything needed by `list`, `show`, `compare`, `summarize`, `paired`, `plot`, and `bars`.
+- Any existing local target directory requires `--overwrite` (including when upgrading an analysis-only directory to a `--full` restore). Experiment downloads respect local writer locks (`.locks/`), preventing overwrites of runs currently being written by another local process.
+
+### Overwrite Rules, Publication & Concurrency
+
+| Operation | Remote Overwrite Authorization |
+| :--- | :--- |
+| New `train`, `test`, `tune`, or ordinary `prepare` | Refuses remote ID collisions |
+| Explicit `--overwrite` (`train`, `test`, `prepare`, or `storage upload`) | Replaces the target remote object (for a study or group, includes its associated runs) |
+| `train --resume` | Updates the remote run |
+| `tune --continuation` | Updates the remote study and its associated trial runs |
+| `group run --action resume\|rerun` | Updates the group record and **only** the existing member runs actually resumed or rerun in this invocation (new and skipped completed members still refuse remote collisions) |
+
+- **Safe Remote Publication:** Uploads read directly from the local directory without making a duplicate local copy. Each object uploads into a new remote batch and writes a completion marker only after `rclone` succeeds; old batches are cleaned up afterward, and readers pin a single published batch for the entire download. Remote replacement temporarily requires space for both old and new batches (and an interrupted upload may leave an unpublished batch until the next `--overwrite`). If old-batch cleanup fails after the new marker is published, the result reports `failed` with `published=True`. Remote storage retains only the current artifact set (such as currently retained Top-$K$ and `last` checkpoints), not a historical version archive.
+- **Concurrency & Parallel Tuning:** There is no distributed lock, cross-machine process detection, or automatic study-completion detection. Keep local upload sources stable, use a single uploader per object, and avoid overlapping downloads with remote uploads or cleanup (if cleanup interrupts an active download, retry the download manually). When running **multiple parallel processes on the same Optuna study**, pass `--set storage.enabled=false` on **every** command and run a manual `research storage upload` after **all** processes finish (sequential `tune --continuation` runs still auto-upload normally).
+- **Backend Verification & Integrity:** Transfers rely on `rclone`'s native integrity checks (whose strength depends on the backend; size checks without backend hashes do not verify byte-for-byte identity, and no extra template-level hashing pass is added). The publication mechanism is verified against `rclone`'s local backend; verify that completed uploads are immediately readable and completion markers are reliably listable on your chosen S3, SFTP, FTP, or WebDAV service before relying on it.

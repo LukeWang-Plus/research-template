@@ -2,6 +2,8 @@
 
 > 状态：D1–D13 已确认调整已按授权落实代码、示例与用户说明；实际验证及未完成外部验收见 [实施计划](ImplementationPlan.md)。 终端展示方案已实施，见第 2.4 节及实施计划。
 
+> 可选产物存储已实现并完成本地验证，见第 10 节；真实服务的发布行为待选定服务后验证。
+
 本文落实 [产品需求](PRD.md)，不继承旧方案的技术设计。功能行为以 PRD 为权威，本文件定义实现组织与技术约束。
 
 ## 1. 总体组织与目录
@@ -38,6 +40,8 @@
 - 校验集中在入口与关键正确性条件，不在调用链各层重复防御；不吞异常，不在失败后自动切换参数、平台或加载方式。
 
 公共默认值边界（已落实）：取消 seed、数据名/路径、主指标、方向和 epoch 上限的隐含值，按 PRD 第 5.2 节在实际用到时校验；示例显式填入所用值。保留 device=cpu、output=experiments、空名称/标签/备注、keep_top_k=1、早停关闭及剪枝 none。不批量取消库内部或示例方法自己的默认参数。
+
+可选 `[storage]` 配置及非研究字段边界见第 10.2 节。
 
 ### 2.2 命令入口
 
@@ -136,6 +140,8 @@ epoch 级展示显式设置 `speed_estimate_period=float("inf")`，不按时间�
 数据准备的显式覆盖通过 `research prepare --overwrite` 与 `core.runner.prepare(config, root=ROOT, *, overwrite=False)` 传递。默认调用已有 `prepare(config, root)`；只有请求覆盖时才传入 `overwrite=True`，方法须接受该关键字，否则保留 Python 原生参数错误，不忽略请求或新增能力声明。支持覆盖的方法使用 `prepare(config, root, *, overwrite=False)`。
 
 公共 `core.records.check_outputs(paths, *, overwrite=False)` 检查一组 Path 目标：已存在且未允许覆盖时抛出 FileExistsError；不创建、删除或写入文件，不要求元数据或获取锁。方法在生成与写入前检查完整目标集合，再自行创建目录及写入产物。两个示例共用 dataio/toy.py 的准备函数，只替换各自 train/validation/test 文件；目录可已存在，其他内容保留。实验目录覆盖继续使用现有 records.fresh()，不改其实现或保护语义。数据准备的失败与并发边界见 PRD §5.2。
+
+启用产物上传时的 prepare 返回目录约定见第 10.3 节，本地覆盖仍由方法负责。
 
 同一任务的多个数据集可共享规范化读取逻辑，不同原始格式在准备阶段转换；模型专属处理由方法实现。数据集和划分标识进入记录，供筛选与可比性检查，不以通用格式或缓存系统替代研究者选择。
 
@@ -323,6 +329,8 @@ n_min_trials = 1
 
 硬杀进程可能使 Optuna 留下 RUNNING trial。当前不自动判断其失效、恢复或重试；用户确认进程已停止后，可通过 Optuna 原生 API 显式标记失败，再按既有流程重试。这是运行限制，不代表模板提供故障自动恢复保证。
 
+同一 study 的多进程产物传输安排遵循 PRD 第 5.11 节与本文第 10.4 节。
+
 ### 7.4 采样器与预算
 
 仅支持 TPE（默认）和 Grid，直接使用 Optuna 原生采样器，不建注册框架。两者 seed 均复用显式填写的 config.seed；trial 训练不按 trial 编号更换 seed。不持久化采样器内部随机状态，也不保证跨进程续跑或并行的轨迹完全一致。
@@ -423,3 +431,120 @@ Grid 复用 search.space 的 categorical/choices，所有搜索参数及有限�
 采用 Ruff 格式化/lint、精简 pytest 与轻量示例，不设全量静态类型检查门禁或覆盖率目标。执行顺序、验收命令、GitHub Actions 双系统 CPU 验证、本地 GPU 验证及外部平台实测边界统一见 [单阶段实施计划](ImplementationPlan.md#4-验证与验收)。
 
 实现采用 filelock、Optuna SQLite、SciPy，以及默认线性分类和变长字典自定义回归两个轻量示例。实际验证与未完成项见实施计划。若需要改变上述职责或行为，重新确认，不以实现便利扩大范围。
+
+## 10. 可选产物存储
+
+本节落实 [PRD 第 5.11 节](PRD.md#511-可选产物同步与备份)，代码与本地验证已完成。真实服务的发布行为尚需验证，见第 10.7 节；实施与验证记录见 ImplementationPlan 第 11 节。
+
+### 10.1 职责与依赖
+
+- `core/storage.py` 提供共享上传、下载功能，CLI 与 Notebook 复用普通 Python 函数；模板负责选择对象、覆盖授权、发布顺序和结果处理，不接管方法循环。
+- Python 通过子进程调用 rclone。仅启用传输能力的设备需要安装 rclone；各设备自行配置 remote 及凭据，模板不实现各类协议、不引入常驻 HTTP 服务或 librclone 分发。
+- 依赖 rclone 原生传输检查与执行结果，不自行计算哈希、逐文件比对或下载回验，不额外增加全量校验步骤。原生检查能力随后端而异，没有可用哈希时的大小检查不等同逐字节验证。
+- 未配置或关闭自动上传时，不检查或要求安装 rclone，不增加准备返回值要求；显式请求传输时缺少所需工具或配置应明确报错。
+
+### 10.2 存储配置
+
+使用独立的可选配置表，存在时默认启用自动上传：
+
+```toml
+[storage]
+remote = "archive:research/project-a"
+```
+
+- `archive` 是设备上配置的 rclone remote，后面是项目远端根路径。凭据由 rclone 管理，不写入实验配置。
+- 未配置 `[storage]` 时不自动上传；`storage.enabled=false` 关闭自动上传，支持现有点路径覆盖 `--set storage.enabled=false`。显式手动传输与自动上传开关分开处理。
+- 存储设置进入生效配置快照，属于非研究选项，不参与实验可比性判断。恢复训练、继续调参及来源 checkpoint 测试的配置检查允许调整它，不改变研究字段的限制。
+- 下载后的配置若包含已启用的 `[storage]`，再次用于训练或测试仍会启用上传。
+- `group run`、`group test` 使用本次顶层命令直接传入配置中的 `[storage]`，统一决定开关和目标。例如 `research group run configs/linear.toml seeds-demo` 使用 `configs/linear.toml` 的存储配置；成员计算仍使用创建组时保存的成员配置。
+
+### 10.3 对象、标识与传输范围
+
+远端逻辑对象与本地已有记录对应，各对象独立存储，集合通过既有 ID 关系关联运行：
+
+| 对象 | 标识与本地来源 |
+|---|---|
+| 数据集 | 默认以 `data.name` 为远端标识；prepare 明确返回的产物目录 |
+| 运行 | 运行 ID；`runs/ID`，包括普通训练、独立测试、trial 和实验组成员 |
+| study | study ID；`studies/ID` 自身记录及 Optuna 数据库，通过关联的 trial 运行 ID 选择成员 |
+| 实验组 | 组 ID；`groups/ID` 自身记录与成员配置，通过成员 ID 选择运行 |
+
+每个运行 ID 对应一个远端逻辑位置，不因属于 study／实验组而复制成员目录。单独处理运行与批量处理集合使用同一对象；替换授权与部分成功语义以 PRD 第 5.11 节为准。
+
+**数据准备接入：**启用自动上传的 prepare 返回一个明确目录，上传该目录全部内容。现有两个示例已返回目录；不扫描整个 `data/`，也不将 `data.path` 自动视为全部准备产物。未启用上传的方法保持现有接口。分散在多个位置的特殊产物通过显式手动上传处理。
+
+**数据身份：**允许显式指定其他远端数据标识，但不改写配置中的 `data.name`。同一项目内需要同时保留不同内容时使用不同标识，例如 `dataset-a-split-v1`、`dataset-a-split-v2`；相同标识表示同一份远端数据，不比较目录内容来推断身份。
+
+**完整传输：**运行目录包含现有配置、记录、指标、日志、保留的 checkpoint、平台本地产物及方法额外文件；study／组的批量操作选择相应记录和关联运行。prepare 的数据目录单独上传，不随实验重复传输。
+
+**分析记录下载：**按已知文件用途选择，具体包括：
+
+- 运行的 `config.toml`、`config-N.toml`、`record.json`、`metrics-N.jsonl`、`checkpoint.json` 和 `log.txt`。
+- 实验组的 `record.json`、成员配置，以及关联成员的上述运行记录。
+- study 的配置与记录、`study.sqlite3`，以及关联 trial 的上述运行记录。现有 study 查询依赖数据库，因此即使较大也包含在此范围。
+
+分析范围不含 checkpoint 权重、逐样本预测、TensorBoard 文件或方法自定义产物；需要时使用完整下载。不按文件大小或扩展名推断分析用途。
+
+### 10.4 顶层接入与状态处理
+
+- 自动上传在共享 Python 顶层入口正常结束后触发，覆盖 prepare、单次训练、独立测试、调参、实验组运行及批量测试；CLI 只调用同一功能。
+- 调参统一选择 study 与关联 trial；实验组运行选择组记录及关联成员；批量测试集中上传本次产生的独立测试运行。内部 trial／成员调用不各自触发上传，其配置快照不因该控制而改写。
+- 实验组按本次实际操作收集恢复／重跑的已有运行 ID，通过内部 `_overwrite_runs` 参数传递逐成员覆盖许可；组记录按显式 action 授权。授权范围以 PRD 第 5.11 节为准。
+- 计算状态先按既有流程结算，再执行传输。上传错误不能进入将计算记录改成 failed 的异常路径；传输结果独立报告，命令退出行为遵循 PRD 第 5.11 节。
+- 正常早停与正常结束的调参按既有计算状态处理；失败、剪枝的 trial 保留实际状态。顶层异常退出不触发自动上传，手动上传不修改已有计算状态。
+- `--continuation` 是追加调参，不是并行检测信号。同一 study 的多个并行进程均由研究者设置 `--set storage.enabled=false`，全部结束后手动上传；不增加 PID、心跳或全 study 完成探测。
+
+### 10.5 单对象发布与批量报告
+
+发布与覆盖按单个对象执行，不建立跨运行、study 或实验组的事务。远端授权统一遵循 PRD 第 5.11 节；prepare 的本地文件覆盖仍使用第 3.3 节契约。
+
+每个对象的处理顺序为：
+
+1. 将本次内容上传到独立的新内容位置，本地直接读取已有产物。
+2. rclone 传输成功后发布该对象的新内容，下载只选择已发布内容。
+3. 发布成功后清理旧内容，使对象的当前文件集合与本次本地产物一致。
+
+远端布局为：
+
+```text
+<项目远端根>/<datasets|runs|studies|groups>/<编码后的标识>/
+├─ batches/<20位递增序号>-<UUID>/content/   # 对象内容
+└─ published/<20位递增序号>-<UUID>         # JSON 完成标记
+```
+
+序号按单写者规则递增。rclone 传输成功后才写完成标记，包含 `complete=true` 及集合本次选择的现存运行 ID。尚未创建运行目录的 trial 或待执行组成员不列入下载对象；原始 study／组记录保持实际状态。读取时选取序号最大的有效完成标记，未写完整的 JSON 标记不作为发布，单个对象的下载固定到选中的批次。
+
+发布成功后清理本次上传前列出的旧标记与旧批次。发布请求报错时，新标记可能已经落地，因此不因该错误删除新批次或旧版本；下一次显式授权覆盖可清理残留。已确认发布但清理失败时，结果报告失败并设置 `published=True`，说明新版本已可下载而清理未完成。接受新旧内容临时共存，不建立跨版本文件复用系统或历史恢复功能。真实服务依赖见第 10.7 节。
+
+批量操作遇到第一个失败即停止，逐对象报告标识、成功、失败及原因、尚未尝试状态；成功对象保留更新，研究者可针对未完成对象重试。计算与传输状态分开，不通过改写训练、测试或 trial 结果来表达传输失败。
+
+### 10.6 本地下载与写入保护
+
+- 完整覆盖下载先进入临时位置，下载成功后才替换对应目标目录；下载阶段失败时已有产物保持可用。接受本地替换期间旧产物与新内容的临时空间开销。
+- 分析记录下载只更新第 10.3 节的分析文件，不删除已有权重或其他大型文件。目标存在时的授权，包括补充完整下载，沿用 PRD 第 5.11 节。
+- 沿用第 6.1 节的本地目录写锁，下载覆盖不得绕过正在写入的模板进程。上传期间源内容需保持稳定，不为上传复制一份完整本地目录。
+- 跨设备上传及读写冲突由研究者协调。旧版本清理不登记或等待远端读者；因清理导致的下载失败按既定规则手动重试。
+
+### 10.7 后端发布的待验证项
+
+普通 rclone copy/sync 按文件处理，move 可能退回逐文件移动或复制后删除，不能直接作为跨后端的目录整体原子替换。第 10.5 节使用独立批次与完成标记，不依赖目录整体移动或覆盖固定的 current 指针。
+
+该机制已通过 rclone 本地后端验证；所选真实服务仍须满足已完成上传可读、完成标记可可靠列举的条件。不能仅凭 S3 兼容、SFTP、FTP 或 WebDAV 接口名称确定保证。具体服务尚未选定，真实后端行为尚未实测；验证记录归 ImplementationPlan 第 11 节。
+
+依据：[rclone sync](https://rclone.org/commands/rclone_sync/)、[rclone move](https://rclone.org/commands/rclone_move/)、[rclone 原生传输检查](https://rclone.org/docs/)、[AWS S3 一致性说明](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html#ConsistencyModel)。
+
+### 10.8 手动入口与返回结果
+
+CLI 使用 `research storage upload/download` 子命令，位置参数为配置文件和对象类别 `datasets/runs/studies/groups`，通过 `--id` 选择对象。数据集标识省略时使用 `data.name`，并要求显式 `--source` 或 `--destination`；运行、study 和组按配置的 output 及 ID 定位。
+
+```bash
+research storage upload configs/linear.toml runs --id first-run
+research storage download configs/linear.toml runs --id first-run
+research storage download configs/linear.toml runs --id first-run --full --overwrite
+```
+
+下载默认选择分析记录，`--full` 选择完整对象；数据集使用完整下载。手动命令支持 `--root`、`--set` 和显式 `--overwrite`。组运行／测试也支持 `--set` 调整顶层存储配置。
+
+Python 入口为 `core.storage.upload(config, kind, id=None, *, source=None, overwrite=False, root=ROOT)` 与 `download(config, kind, id=None, *, destination=None, analysis_only=True, overwrite=False, root=ROOT)`。传输结果按对象返回 `TransferResult`，状态为 `success`、`failed` 或 `not_attempted`，失败附原因；`format_results` 用于文本报告。
+
+手动 CLI 遇到传输失败返回非零退出码。自动上传失败抛出携带结果列表的 `TransferError`，计算记录保持原状态。`published` 字段表示本次调用已确认发布的状态，用于区分已发布后的清理失败。

@@ -6,12 +6,14 @@ from typing import Annotated
 
 import typer
 
-from core import analysis, display, groups, plotting, runner, tuning
+from core import analysis, display, groups, plotting, runner, storage, tuning
 from core.config import ROOT, load, path
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 group_app = typer.Typer(no_args_is_help=True)
 app.add_typer(group_app, name="group")
+storage_app = typer.Typer(no_args_is_help=True)
+app.add_typer(storage_app, name="storage")
 Root = Annotated[Path, typer.Option(help="Project root for relative paths")]
 Overrides = Annotated[
     list[str] | None,
@@ -144,10 +146,16 @@ def group_create(
 
 
 @group_app.command("run")
-def group_run(file: Path, id: str, action: str | None = None, root: Root = ROOT):
+def group_run(
+    file: Path,
+    id: str,
+    action: str | None = None,
+    root: Root = ROOT,
+    set: Overrides = None,
+):
     """Continue serially; --action resume/rerun handles failed members explicitly."""
     completed = groups.run_group(
-        load(file, root=root),
+        config(file, set, root),
         id,
         action=action,
         root=root,
@@ -162,11 +170,66 @@ def group_test(
     id: str,
     members: Annotated[list[str], typer.Option("--member")],
     root: Root = ROOT,
+    set: Overrides = None,
 ):
     results = groups.test_members(
-        load(file, root=root), id, members, root=root, display=display.RunDisplay()
+        config(file, set, root), id, members, root=root, display=display.RunDisplay()
     )
     display.table("Test runs", ("Run ID",), ((item,) for item in results))
+
+
+def transfer_result(results):
+    typer.echo(storage.format_results(results))
+    if any(result.status != "success" for result in results):
+        raise typer.Exit(1)
+
+
+@storage_app.command("upload")
+def storage_upload(
+    file: Path,
+    kind: str,
+    id: str | None = None,
+    source: Path | None = None,
+    overwrite: bool = False,
+    root: Root = ROOT,
+    set: Overrides = None,
+):
+    """Upload datasets/runs/studies/groups; collections include associated runs."""
+    transfer_result(
+        storage.upload(
+            config(file, set, root),
+            kind,
+            id,
+            source=source,
+            overwrite=overwrite,
+            root=root,
+        )
+    )
+
+
+@storage_app.command("download")
+def storage_download(
+    file: Path,
+    kind: str,
+    id: str | None = None,
+    destination: Path | None = None,
+    full: bool = False,
+    overwrite: bool = False,
+    root: Root = ROOT,
+    set: Overrides = None,
+):
+    """Download analysis records by default; --full includes all artifacts."""
+    transfer_result(
+        storage.download(
+            config(file, set, root),
+            kind,
+            id,
+            destination=destination,
+            analysis_only=not full,
+            overwrite=overwrite,
+            root=root,
+        )
+    )
 
 
 @app.command("list")

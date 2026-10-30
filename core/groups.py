@@ -1,5 +1,6 @@
 """Serial experiment groups; independent members can also run from any terminal."""
 
+from core import storage
 from core.config import ROOT, Config, dumps, load
 from core.records import atomic, directory, fresh, identifier, locked, now, read_json
 from core.runner import execute, test
@@ -44,6 +45,7 @@ def run_group(config, id, *, action=None, root=ROOT, display=None):
     if action not in (None, "resume", "rerun"):
         raise ValueError("Failed members require resume or rerun")
     target = directory(config, "groups", id, root)
+    overwritten = set()
     with locked(target):
         meta = read_json(target / "record.json")
         meta["status"] = "running"
@@ -67,7 +69,10 @@ def run_group(config, id, *, action=None, root=ROOT, display=None):
                     root=root,
                     source={"group": id},
                     display=display,
+                    _upload=False,
                 )
+                if exists:
+                    overwritten.add(member)
             meta["status"] = "completed"
             meta.pop("error", None)
         except BaseException as exc:
@@ -75,6 +80,14 @@ def run_group(config, id, *, action=None, root=ROOT, display=None):
             raise
         finally:
             atomic(target / "record.json", meta)
+    storage.auto_upload(
+        config,
+        "groups",
+        id,
+        overwrite=action is not None,
+        _overwrite_runs=overwritten,
+        root=root,
+    )
     return id
 
 
@@ -86,5 +99,8 @@ def test_members(config, id, members, *, root=ROOT, display=None):
     results = []
     for member in members:
         actual = load(target / f"{member}.toml", root=root)
-        results.append(test(actual, source=member, root=root, display=display))
+        results.append(
+            test(actual, source=member, root=root, display=display, _upload=False)
+        )
+    storage.auto_upload_runs(config, results, root=root)
     return results

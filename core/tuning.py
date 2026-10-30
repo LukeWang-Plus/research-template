@@ -5,6 +5,7 @@ from math import prod
 
 import optuna
 
+from core import storage as artifacts
 from core.config import ROOT, Config, changed, dumps, load, set_value
 from core.platforms import PlatformError
 from core.records import atomic, directory, fresh, identifier, locked, now, read_json
@@ -103,7 +104,7 @@ def tune(config, *, trials, id=None, continuation=False, retry=None, root=ROOT):
             changed(
                 load(target / "config.toml", root=root),
                 config,
-                {"device", "platforms", "search.catch"},
+                {"device", "platforms", "search.catch", "storage"},
             )
             meta = read_json(target / "record.json")
         else:
@@ -160,6 +161,7 @@ def tune(config, *, trials, id=None, continuation=False, retry=None, root=ROOT):
                     "trial": trial.number,
                     "retry_of": trial.user_attrs.get("retry_of"),
                 },
+                _upload=False,
             )
             method = get(actual.method)
             if hasattr(method, "objective"):
@@ -210,6 +212,7 @@ def tune(config, *, trials, id=None, continuation=False, retry=None, root=ROOT):
                 else status
             )
             atomic(target / "record.json", meta)
+    artifacts.auto_upload(config, "studies", id, overwrite=continuation, root=root)
     return id
 
 

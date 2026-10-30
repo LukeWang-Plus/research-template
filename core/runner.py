@@ -5,6 +5,7 @@ from pathlib import Path
 
 import torch
 
+from core import storage
 from core.config import ROOT, Config, changed, load, path
 from core.records import (
     Run,
@@ -25,8 +26,17 @@ def prepare(config: Config, root=ROOT, *, overwrite=False):
     method = get(config.method)
     root = Path(root).resolve()
     if overwrite:
-        return method.prepare(config, root, overwrite=True)
-    return method.prepare(config, root)
+        target = method.prepare(config, root, overwrite=True)
+    else:
+        target = method.prepare(config, root)
+    if storage.enabled(config) and target is None:
+        raise ValueError(
+            "Automatic dataset upload requires prepare() to return its artifact directory"
+        )
+    storage.auto_upload(
+        config, "datasets", source=target, overwrite=overwrite, root=root
+    )
+    return target
 
 
 def execute(
@@ -40,6 +50,7 @@ def execute(
     source=None,
     invocation=None,
     display=None,
+    _upload=True,
 ):
     if resume and (overwrite or id is None):
         raise ValueError("Resume requires an ID and cannot be combined with overwrite")
@@ -61,7 +72,7 @@ def execute(
     with locked(target):
         if resume:
             old = load(target / "config.toml", root=root)
-            changed(old, config, {"train.epochs", "device", "platforms"})
+            changed(old, config, {"train.epochs", "device", "platforms", "storage"})
             if not (target / "checkpoint.json").exists():
                 raise ValueError("No complete checkpoint is available")
             if not hasattr(method, "run"):
@@ -70,6 +81,10 @@ def execute(
                     raise ValueError("Epoch limit cannot precede the saved checkpoint")
                 if config.train.epochs == saved["epoch"]:
                     print(f"{id}: epoch limit already reached; no training needed")
+                    if _upload:
+                        storage.auto_upload(
+                            config, "runs", id, overwrite=True, root=root
+                        )
                     return id
         else:
             fresh(target, overwrite=overwrite, kind="train")
@@ -137,6 +152,10 @@ def execute(
         finally:
             if display:
                 display.finish()
+    if _upload:
+        storage.auto_upload(
+            config, "runs", id, overwrite=overwrite or resume, root=root
+        )
     return id
 
 
@@ -151,6 +170,7 @@ def test(
     root=ROOT,
     invocation=None,
     display=None,
+    _upload=True,
 ):
     """Source config owns architecture; evaluation config may select data/protocol/device."""
     if (source is None) == (external is None):
@@ -175,6 +195,7 @@ def test(
                     "protocol",
                     "device",
                     "platforms",
+                    "storage",
                     "name",
                     "tags",
                     "note",
@@ -244,4 +265,6 @@ def test(
         finally:
             if display:
                 display.finish()
+    if _upload:
+        storage.auto_upload(config, "runs", id, overwrite=overwrite, root=root)
     return id

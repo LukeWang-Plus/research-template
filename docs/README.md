@@ -8,6 +8,8 @@
 
 本地绘图设计已实施：保留三类图，绘图与查询统计作功能模块拆分，CLI/Notebook 默认局部应用同一基础样式，高级覆盖及保存通过显式 style 完成。CLI、Notebook 示例及测试已同步；需求见 PRD §5.8，技术边界见 Architecture §8.3，实施与验证状态见 ImplementationPlan §8。
 
+可选产物同步与备份已实现并完成 rclone 本地后端验证：需求见 [PRD §5.11](PRD.md#511-可选产物同步与备份)，配置、独立对象与传输接入见 [Architecture §10](Architecture.md#10-可选产物存储)，实际验证记录见 ImplementationPlan §11。英文用户 README 已同步手动与自动传输用法；真实服务的发布行为待选定服务后验证。
+
 建议依次阅读 [产品需求](PRD.md)、[技术架构](Architecture.md) 和 [实施计划](ImplementationPlan.md)。当前公共包为 `core/`、CLI 为 `research`，命名与固定 PyTorch 约束见技术架构。旧方案只供参考，不构成新设计约束；其中 DeepBench 的历史称呼保留，不代表当前命名。
 
 ## 文档清单与职责
@@ -15,8 +17,8 @@
 | 文档 | 内容与边界 |
 |---|---|
 | [DocumentationRules.md](DocumentationRules.md) | 通用文档职责与内容归属规则 |
-| [PRD.md](PRD.md) | 项目目标、安全边界、首版功能范围、验收主线、非目标及待讨论事项 |
-| [Architecture.md](Architecture.md) | 已确认的浅层目录、配置与 CLI、方法接入、默认循环契约、记录与恢复、checkpoint、调参与平台实现边界；已实现的入口、结果来源与 checkpoint 管理/状态分离契约 |
+| [PRD.md](PRD.md) | 项目目标、安全边界、功能范围、验收主线、非目标；已确认的可选产物同步与备份需求 |
+| [Architecture.md](Architecture.md) | 已确认的浅层目录、配置与 CLI、方法接入、默认循环契约、记录与恢复、checkpoint、调参与平台实现边界；已实现的入口、结果来源与 checkpoint 管理/状态分离契约；产物存储接入与后端验证边界 |
 | [ImplementationPlan.md](ImplementationPlan.md) | 单阶段任务顺序、精简验证、平台实测边界与执行状态 |
 | [references/refactor-requirements.md](references/refactor-requirements.md) | 旧现状分析与旧重构方案的历史参考，不具有规范效力 |
 | [research/implementation-choices-pending.md](research/implementation-choices-pending.md) | 已完成的实现决策复核过程；正式结论已同步，保留用于溯源，不是第二份规范 |

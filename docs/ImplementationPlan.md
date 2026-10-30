@@ -2,6 +2,8 @@
 
 > 状态：首版、四项审查修复及剪枝/统计调整已有实现和下述本地验证。D1–D13 调整已获后续编码授权并完成，本次验证见第 6 节。Windows/Linux CPU CI 已于 2026-09-18 通过（提交 `84ed8be`）；整体验收仍待用户确认。 终端展示已获后续编码授权并实施，验证见第 7 节。
 
+> 可选产物存储已实现并完成本地验证，正式文档已同步；实际命令、结果及真实服务待验证项见第 11 节。
+
 ## 1. 范围与执行方式
 
 - 依赖文档：[PRD](PRD.md) 定义首版功能与行为，[Architecture](Architecture.md) 定义架构约束；旧参考方案不增加实施要求。
@@ -248,3 +250,57 @@ Q137–Q151 及统一开始/结束摘要的补充讨论已收敛。用户确认�
 - 现有双参数 prepare 方法在默认调用下保持可用，请求未支持的覆盖时直接报错。
 - 本地验证：tests/test_workflow.py 的 10 项 pytest（MPLBACKEND=Agg）通过，覆盖两个示例的空目录准备、全部目标预检、Python/CLI 显式覆盖、无关文件保留、双参数方法兼容，以及既有实验覆盖和训练流程。SciencePlots 的 7 条上游弃用警告未屏蔽。
 - 受影响 Python 文件的 Ruff 格式化/lint 与 git diff --check 通过；本轮未运行完整 pytest、独立 smoke、GPU 或远程 CI。
+
+## 11. 产物存储（已实施，本地验证完成）
+
+需求以 [PRD 第 5.11 节](PRD.md#511-可选产物同步与备份) 为准，配置、对象范围、顶层接入与发布边界见 [Architecture 第 10 节](Architecture.md#10-可选产物存储)。存储接入已实施，prepare 的本地覆盖沿用第 10 节契约。
+
+### 11.1 实施状态
+
+代码按授权由 GPT-6.1 Sol / xhigh 编码子代理实现并验证，主管完成整合、代码核对与正式文档同步。
+
+| 顺序 | 最小实施范围 | 状态 |
+|---|---|---|
+| 1 | 明确单对象发布方式，接入可选存储配置与 rclone 子进程调用；保留后端相关的验证边界 | 已实施 |
+| 2 | 实现共享手动上传、分析／完整下载及 CLI 薄入口，落实覆盖授权、临时下载保护和逐对象结果报告 | 已实施 |
+| 3 | 接入各顶层任务的自动上传，抑制内部 trial／成员重复触发，保持计算状态与传输结果分离 | 已实施 |
+| 4 | 完成聚焦验证，同步实际 CLI／Notebook 用法及英文用户 README，记录真实后端验证范围 | 本地验证及说明已完成；真实服务待验证 |
+
+通用实现已完成。具体存储服务由研究者选定后，再验证其完成标记列举及数据写后可读行为；当前证据范围为隔离的 rclone 本地后端。
+
+### 11.2 最小必要验证
+
+- 未配置或关闭自动上传时，现有调用可继续使用，不要求安装 rclone，不强迫方法提供准备产物目录；已实现的 prepare 覆盖契约继续成立。
+- 新建、显式覆盖、恢复和继续调参的授权作用于正确对象；运行可独立更新，study／组不重复保存成员目录，存储设置不影响实验可比性。
+- 使用小型产物验证单对象上传失败时的旧版本保护、未发布内容不供完整下载、成功替换清除旧文件；批量部分成功报告包含成功、失败原因和未尝试对象，计算状态不被传输失败改写。
+- 验证完整覆盖下载在下载失败时保留本地旧产物，分析下载保留已有权重和额外文件，覆盖遵守现有本地写锁。下载的分析记录应支持既有查询与分析，包括 study 的 SQLite 数据库。
+- 在现有轻量流程中验证正常顶层结束才触发上传、批量内部不重复触发、失败／剪枝 trial 状态保留及异常顶层不自动上传；不增加进程检测或并行调度测试矩阵。
+- 执行受影响文件的 Ruff 与聚焦 pytest，必要时复用现有 CPU 示例验证调用链。传输验证使用 rclone 原生机制，不新增模板文件校验系统，不扩展 GPU 或外部实验平台验证范围。
+
+### 11.3 交付与验证记录
+
+- 新增 `core/storage.py` 与 `tests/test_storage.py`，更新配置、CLI、runner、tuning 和 groups 接入。英文根 README 提供 CLI 与 Python/Notebook 用法，正式文档记录独立批次、完成标记、逐对象状态及覆盖规则。
+- 自动组上传按成员实际操作授权，仅本次恢复／重跑的已有运行允许覆盖；新建和跳过的已完成成员仍拒绝远端碰撞。手动集合覆盖及 tune continuation 按 PRD 第 5.11 节授权。
+- 本地环境为 Windows，已安装 rclone **v1.73.1**；测试使用空隔离配置及环境变量定义的 local remote，在临时目录实际传输。
+
+基础验证命令：
+
+```bash
+uv run --no-sync ruff format core/storage.py core/config.py core/runner.py core/tuning.py core/groups.py core/cli.py tests/test_storage.py
+uv run --no-sync ruff check core/storage.py core/config.py core/runner.py core/tuning.py core/groups.py core/cli.py tests/test_storage.py
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run --no-sync pytest -q tests/test_storage.py tests/test_workflow.py tests/test_decisions.py tests/test_results.py
+```
+
+结果：Ruff 通过，**26 项测试通过**。覆盖实际本地传输、发布失败与旧版保护、清理失败报告、分析下载后的查询／绘图、study SQLite 查询、完整下载失败保护、写锁、批量结果及自动上传边界。
+
+最终组成员授权验证命令：
+
+```bash
+uv run --no-sync ruff format core/groups.py core/storage.py tests/test_storage.py
+uv run --no-sync ruff check core/groups.py core/storage.py tests/test_storage.py
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run --no-sync pytest -q tests/test_storage.py -k "group or tune_batches"
+```
+
+结果：Ruff 通过，**5 项聚焦测试通过**；两种 group action 下，新建成员不获覆盖授权；跳过的已完成成员遇到远端碰撞时拒绝覆盖，旧批次与内容保持。实际恢复／重跑成员可更新，手动集合覆盖仍有效。此轮只执行上述聚焦范围，其余测试保留前一轮证据。
+
+本次未操作真实云存储，未运行完整 pytest、独立 smoke、GPU 或远程 CI。所选真实服务的发布行为仍须按第 11.1 节验证。
