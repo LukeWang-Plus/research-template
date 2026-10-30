@@ -23,5 +23,17 @@ jobs:
         run: |
           uv run ruff format --check .
           uv run ruff check .
+      - name: Install latest rclone
+        run: |
+          platform="${RUNNER_OS,,}"
+          executable=rclone
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            executable=rclone.exe
+          fi
+          curl --fail --location "https://downloads.rclone.org/rclone-current-${platform}-amd64.zip" --output "$RUNNER_TEMP/rclone.zip"
+          unzip -j "$RUNNER_TEMP/rclone.zip" "*/$executable" -d "$RUNNER_TEMP/rclone"
+          chmod +x "$RUNNER_TEMP/rclone/$executable"
+          echo "$RUNNER_TEMP/rclone" >> "$GITHUB_PATH"
+      - run: rclone version
       - run: uv run pytest -q
       - run: uv run python -m tests.smoke --device cpu
